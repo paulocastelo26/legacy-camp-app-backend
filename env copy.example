@@ -1,0 +1,10 @@
+# Configurações do Banco de Dados
+DB_HOST=localhost
+DB_PORT=3306
+DB_USERNAME=root
+DB_PASSWORD=
+DB_DATABASE=legacy_camp
+
+# Configurações da Aplicação
+PORT=3000
+NODE_ENV=development 

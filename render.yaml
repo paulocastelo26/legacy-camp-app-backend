@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: legacy-camp-backend
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_DATABASE
+        sync: false
+
+databases:
+  - name: legacy-camp-db
+    databaseName: legacy_camp
+    user: legacy_camp_user 

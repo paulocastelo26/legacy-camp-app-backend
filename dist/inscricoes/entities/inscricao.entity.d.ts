@@ -1,0 +1,36 @@
+export declare class Inscricao {
+    id: number;
+    fullName: string;
+    birthDate: Date;
+    age: number;
+    gender: string;
+    phone: string;
+    email: string;
+    address: string;
+    socialMedia: string;
+    emergencyContactName: string;
+    emergencyContactPhone: string;
+    emergencyContactRelationship: string;
+    isLagoinhaMember: string;
+    churchName: string;
+    ministryParticipation: string;
+    registrationLot: string;
+    paymentMethod: string;
+    paymentProof: string;
+    shirtSize: string;
+    hasAllergy: string;
+    allergyDetails: string;
+    usesMedication: string;
+    medicationDetails: string;
+    dietaryRestriction: string;
+    hasMinistryTest: string;
+    ministryTestResults: string;
+    prayerRequest: string;
+    imageAuthorization: boolean;
+    analysisAwareness: boolean;
+    termsAwareness: boolean;
+    truthDeclaration: boolean;
+    status: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
