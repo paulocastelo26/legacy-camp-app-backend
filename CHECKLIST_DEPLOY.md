@@ -18,9 +18,13 @@
 - [ ] Código commitado no GitHub
 - [ ] Todos os arquivos de configuração presentes:
   - [ ] `railway.json` ✅
+  - [ ] `railway.toml` ✅
   - [ ] `package.json` ✅
   - [ ] `tsconfig.json` ✅
   - [ ] `nest-cli.json` ✅
+  - [ ] `.dockerignore` ✅
+- [ ] Build testado localmente: `npm run build`
+- [ ] Dependência `rimraf` instalada
 
 ### 3. Variáveis de Ambiente
 Preparar para adicionar no Railway:
