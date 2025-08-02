@@ -1,221 +1,148 @@
-# 🧪 Guia de Teste da API - Legacy Camp
+# Teste da API de Inscrições
 
-## 📋 Como Testar
+Este documento contém exemplos de JSON para testar o endpoint POST de inscrições.
 
-### 1. **Usando Swagger UI**
-1. Acesse: http://localhost:3000/api
-2. Clique em `POST /inscricoes`
-3. Clique em "Try it out"
-4. Cole um dos JSONs abaixo
-5. Clique em "Execute"
+## Endpoint
 
-### 2. **Usando cURL**
+```
+POST /inscricoes
+```
+
+## Exemplos de JSON
+
+### 1. Inscrição Básica (test-inscricao.json)
+Exemplo de inscrição sem alergias ou medicações:
+
+```json
+{
+  "fullName": "João Silva Santos",
+  "birthDate": "2000-05-15",
+  "age": 24,
+  "gender": "masculino",
+  "phone": "(31) 99999-9999",
+  "email": "joao.silva@email.com",
+  "address": "Rua das Flores, 123 - Bairro Centro - Belo Horizonte/MG",
+  "socialMedia": "@joaosilva",
+  "emergencyContactName": "Maria Silva Santos",
+  "emergencyContactPhone": "(31) 88888-8888",
+  "emergencyContactRelationship": "Mãe",
+  "isLagoinhaMember": "sim",
+  "churchName": "Igreja Batista da Lagoinha",
+  "ministryParticipation": "Participa do ministério de jovens e música",
+  "registrationLot": "lote1",
+  "paymentMethod": "pix",
+  "paymentProof": "https://exemplo.com/comprovante.jpg",
+  "shirtSize": "M",
+  "hasAllergy": "nao",
+  "allergyDetails": null,
+  "usesMedication": "nao",
+  "medicationDetails": null,
+  "dietaryRestriction": "Nenhuma",
+  "hasMinistryTest": "sim",
+  "ministryTestResults": "Aprovado no teste de liderança e música",
+  "prayerRequest": "Oração pela família e pelo crescimento espiritual",
+  "imageAuthorization": true,
+  "analysisAwareness": true,
+  "termsAwareness": true,
+  "truthDeclaration": true
+}
+```
+
+### 2. Inscrição com Alergias (test-inscricao-com-alergias.json)
+Exemplo de inscrição com alergias e medicações:
+
+```json
+{
+  "fullName": "Ana Paula Costa Oliveira",
+  "birthDate": "2002-08-22",
+  "age": 22,
+  "gender": "feminino",
+  "phone": "(11) 98765-4321",
+  "email": "ana.costa@email.com",
+  "address": "Av. Paulista, 1000 - Bela Vista - São Paulo/SP",
+  "socialMedia": "@anacosta (Instagram)",
+  "emergencyContactName": "Carlos Costa Oliveira",
+  "emergencyContactPhone": "(11) 91234-5678",
+  "emergencyContactRelationship": "Pai",
+  "isLagoinhaMember": "nao",
+  "churchName": "Igreja Presbiteriana do Brasil",
+  "ministryParticipation": "Líder do ministério de jovens e participa do coral",
+  "registrationLot": "lote2",
+  "paymentMethod": "cartao",
+  "paymentProof": "https://exemplo.com/comprovante-cartao.pdf",
+  "shirtSize": "P",
+  "hasAllergy": "sim",
+  "allergyDetails": "Alergia a frutos do mar e intolerância à lactose",
+  "usesMedication": "sim",
+  "medicationDetails": "Vitamina D diária e antialérgico quando necessário",
+  "dietaryRestriction": "Intolerância à lactose",
+  "hasMinistryTest": "nao",
+  "ministryTestResults": null,
+  "prayerRequest": "Oração para discernimento sobre o chamado ministerial e pela saúde da família",
+  "imageAuthorization": true,
+  "analysisAwareness": true,
+  "termsAwareness": true,
+  "truthDeclaration": true
+}
+```
+
+## Como Testar
+
+### Usando cURL
+
 ```bash
+# Teste básico
 curl -X POST http://localhost:3000/inscricoes \
   -H "Content-Type: application/json" \
   -d @test-inscricao.json
+
+# Teste com alergias
+curl -X POST http://localhost:3000/inscricoes \
+  -H "Content-Type: application/json" \
+  -d @test-inscricao-com-alergias.json
 ```
 
-### 3. **Usando Postman**
-- **URL:** `POST http://localhost:3000/inscricoes`
-- **Headers:** `Content-Type: application/json`
-- **Body:** Raw JSON (cole um dos exemplos abaixo)
+### Usando Postman
 
-## 📄 Exemplos de JSON para Teste
+1. Abra o Postman
+2. Crie uma nova requisição POST
+3. URL: `http://localhost:3000/inscricoes`
+4. Headers: `Content-Type: application/json`
+5. Body: Selecione "raw" e "JSON"
+6. Cole um dos exemplos JSON acima
+7. Clique em "Send"
 
-### **Exemplo 1: Membro Lagoinha com Alergias**
-```json
-{
-  "fullName": "João Silva Santos",
-  "birthDate": "2005-03-15",
-  "age": 19,
-  "gender": "masculino",
-  "phone": "(11) 98765-4321",
-  "email": "joao.silva@email.com",
-  "address": "Rua das Flores, 123 - Centro, Manaus - AM, CEP: 69000-000",
-  "socialMedia": "@joao_silva (Instagram) / João Silva Santos (Facebook)",
-  "emergencyContactName": "Maria Silva Santos",
-  "emergencyContactPhone": "(11) 91234-5678",
-  "emergencyContactRelationship": "Mãe",
-  "isLagoinhaMember": "sim",
-  "churchName": "Lagoinha Manaus Sede",
-  "ministryParticipation": "Participante do ministério de jovens e líder de grupo de células há 2 anos. Atualmente sou voluntário no ministério de louvor e participo ativamente do GC (Grupo de Células) do bairro Centro.",
-  "registrationLot": "lote1",
-  "paymentMethod": "pix",
-  "paymentProof": "comprovante_pix_joao_silva.pdf",
-  "shirtSize": "M",
-  "hasAllergy": "sim",
-  "allergyDetails": "Alergia a frutos do mar (camarão, lagosta) e intolerância leve à lactose. Em caso de contato, apresento reações cutâneas e gastrointestinais.",
-  "usesMedication": "nao",
-  "medicationDetails": "",
-  "dietaryRestriction": "Intolerância à lactose",
-  "hasMinistryTest": "sim",
-  "ministryTestResults": "1º Dom: Ensino/Exortação (principal) - 2º Dom: Serviço/Diaconia",
-  "prayerRequest": "Peço oração para que eu possa crescer espiritualmente durante o acampamento e desenvolver melhor os dons que Deus me deu. Também peço oração pela minha família e pelos estudos.",
-  "imageAuthorization": true,
-  "analysisAwareness": true,
-  "termsAwareness": true,
-  "truthDeclaration": true
-}
-```
+### Usando Insomnia
 
-### **Exemplo 2: Não Membro**
-```json
-{
-  "fullName": "Pedro Oliveira Lima",
-  "birthDate": "2004-11-08",
-  "age": 20,
-  "gender": "masculino",
-  "phone": "(11) 97777-8888",
-  "email": "pedro.lima@email.com",
-  "address": "Rua do Comércio, 789 - Centro, Itacoatiara - AM, CEP: 69100-000",
-  "socialMedia": "Pedro Lima (Facebook)",
-  "emergencyContactName": "Lucia Oliveira",
-  "emergencyContactPhone": "(11) 93333-4444",
-  "emergencyContactRelationship": "Irmã",
-  "isLagoinhaMember": "nao",
-  "churchName": "Igreja Batista Betel de Itacoatiara",
-  "ministryParticipation": "Participante do ministério de jovens e líder de grupo de estudo bíblico. Também sou voluntário no ministério de música.",
-  "registrationLot": "lote1",
-  "paymentMethod": "carne",
-  "paymentProof": "",
-  "shirtSize": "G",
-  "hasAllergy": "sim",
-  "allergyDetails": "Alergia a amendoim e castanhas. Reação anafilática em caso de ingestão.",
-  "usesMedication": "nao",
-  "medicationDetails": "",
-  "dietaryRestriction": "Vegetariana",
-  "hasMinistryTest": "nao",
-  "ministryTestResults": "",
-  "prayerRequest": "Peço oração para que eu possa conhecer melhor a Deus e encontrar meu propósito através do acampamento.",
-  "imageAuthorization": true,
-  "analysisAwareness": true,
-  "termsAwareness": true,
-  "truthDeclaration": true
-}
-```
+1. Abra o Insomnia
+2. Crie uma nova requisição POST
+3. URL: `http://localhost:3000/inscricoes`
+4. Body: Selecione "JSON"
+5. Cole um dos exemplos JSON acima
+6. Clique em "Send"
 
-### **Exemplo 3: Sem Alergias**
-```json
-{
-  "fullName": "Mariana Santos Silva",
-  "birthDate": "2006-02-14",
-  "age": 18,
-  "gender": "feminino",
-  "phone": "(11) 95555-6666",
-  "email": "mariana.silva@email.com",
-  "address": "Travessa da Paz, 321 - Flores, Manaus - AM, CEP: 69058-000",
-  "socialMedia": "@mari_silva (Instagram) / Mariana Silva (Facebook)",
-  "emergencyContactName": "Roberto Santos",
-  "emergencyContactPhone": "(11) 94444-5555",
-  "emergencyContactRelationship": "Pai",
-  "isLagoinhaMember": "sim",
-  "churchName": "Lagoinha Manaus Torres",
-  "ministryParticipation": "Participante do ministério de adolescentes e membro ativo do GC há 1 ano. Sou voluntária no ministério de recepção.",
-  "registrationLot": "lote2",
-  "paymentMethod": "pix",
-  "paymentProof": "comprovante_mariana.pdf",
-  "shirtSize": "M",
-  "hasAllergy": "nao",
-  "allergyDetails": "",
-  "usesMedication": "nao",
-  "medicationDetails": "",
-  "dietaryRestriction": "Nenhuma",
-  "hasMinistryTest": "sim",
-  "ministryTestResults": "1º Dom: Evangelismo - 2º Dom: Profecia",
-  "prayerRequest": "Peço oração para que eu possa ser mais corajosa para evangelizar e que Deus me ajude a discernir melhor Sua vontade para minha vida.",
-  "imageAuthorization": true,
-  "analysisAwareness": true,
-  "termsAwareness": true,
-  "truthDeclaration": true
-}
-```
+## Validações Importantes
 
-## ✅ Resposta Esperada
+- **Idade**: Deve ser entre 12 e 100 anos
+- **Gênero**: Apenas "masculino" ou "feminino"
+- **Membro Lagoinha**: Apenas "sim" ou "nao"
+- **Lote**: Apenas "lote1" ou "lote2"
+- **Pagamento**: Apenas "pix", "cartao" ou "carne"
+- **Tamanho da camisa**: Apenas "P", "M", "G", "GG", "XG"
+- **Alergia/Medicação**: Apenas "sim" ou "nao"
+- **Restrição alimentar**: Valores específicos listados no DTO
+- **Teste ministerial**: Apenas "sim" ou "nao"
+- **Autorizações**: Todos devem ser `true`
 
-Se tudo estiver funcionando, você receberá uma resposta como:
+## Campos Opcionais
 
-```json
-{
-  "id": 1,
-  "fullName": "João Silva Santos",
-  "birthDate": "2005-03-15T00:00:00.000Z",
-  "age": 19,
-  "gender": "masculino",
-  "phone": "(11) 98765-4321",
-  "email": "joao.silva@email.com",
-  "address": "Rua das Flores, 123 - Centro, Manaus - AM, CEP: 69000-000",
-  "socialMedia": "@joao_silva (Instagram) / João Silva Santos (Facebook)",
-  "emergencyContactName": "Maria Silva Santos",
-  "emergencyContactPhone": "(11) 91234-5678",
-  "emergencyContactRelationship": "Mãe",
-  "isLagoinhaMember": "sim",
-  "churchName": "Lagoinha Manaus Sede",
-  "ministryParticipation": "Participante do ministério de jovens e líder de grupo de células há 2 anos...",
-  "registrationLot": "lote1",
-  "paymentMethod": "pix",
-  "paymentProof": "comprovante_pix_joao_silva.pdf",
-  "shirtSize": "M",
-  "hasAllergy": "sim",
-  "allergyDetails": "Alergia a frutos do mar (camarão, lagosta) e intolerância leve à lactose...",
-  "usesMedication": "nao",
-  "medicationDetails": "",
-  "dietaryRestriction": "Intolerância à lactose",
-  "hasMinistryTest": "sim",
-  "ministryTestResults": "1º Dom: Ensino/Exortação (principal) - 2º Dom: Serviço/Diaconia",
-  "prayerRequest": "Peço oração para que eu possa crescer espiritualmente...",
-  "imageAuthorization": true,
-  "analysisAwareness": true,
-  "termsAwareness": true,
-  "truthDeclaration": true,
-  "status": "PENDENTE",
-  "createdAt": "2025-07-29T23:45:00.000Z",
-  "updatedAt": "2025-07-29T23:45:00.000Z"
-}
-```
+Os seguintes campos são opcionais e podem ser `null`:
+- `paymentProof`
+- `allergyDetails` (quando `hasAllergy` é "nao")
+- `usesMedication`
+- `medicationDetails` (quando `usesMedication` é "nao")
+- `ministryTestResults` (quando `hasMinistryTest` é "nao")
 
-## 🔍 Outros Endpoints para Testar
+## Resposta Esperada
 
-### **Listar todas as inscrições:**
-```bash
-GET http://localhost:3000/inscricoes
-```
-
-### **Buscar inscrição por ID:**
-```bash
-GET http://localhost:3000/inscricoes/1
-```
-
-### **Ver estatísticas:**
-```bash
-GET http://localhost:3000/inscricoes/stats
-```
-
-### **Atualizar status:**
-```bash
-PATCH http://localhost:3000/inscricoes/1/status
-Content-Type: application/json
-
-{
-  "status": "APROVADA"
-}
-```
-
-## 🚨 Possíveis Erros
-
-### **400 - Bad Request**
-- Dados obrigatórios faltando
-- Formato de email inválido
-- Idade fora do range (12-100 anos)
-
-### **500 - Internal Server Error**
-- Banco de dados não conectado
-- Erro na configuração do .env
-
-## 📞 Suporte
-
-Se houver problemas, verifique:
-1. Servidor rodando em http://localhost:3000
-2. Banco MySQL conectado
-3. Arquivo .env configurado
-4. Logs do servidor no terminal 
+A API deve retornar um status 201 (Created) com os dados da inscrição criada, incluindo o ID gerado automaticamente e os timestamps. 

@@ -8,7 +8,12 @@ async function bootstrap() {
 
   // Configuração do CORS
   app.enableCors({
-    origin: ['http://localhost:4200', 'http://localhost:3000'],
+    origin: [
+      'http://localhost:4200', 
+      'http://localhost:3000',
+      'https://legacycamp.com.br', // Substitua pelo domínio do seu frontend
+      process.env.FRONTEND_URL
+    ].filter(Boolean),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
   });
@@ -21,6 +26,8 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+
 
   // Configuração do Swagger
   const config = new DocumentBuilder()
