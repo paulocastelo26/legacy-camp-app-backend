@@ -7,7 +7,8 @@ import {
   SendWelcomeEmailDto, 
   SendStatusUpdateEmailDto, 
   SendBulkEmailDto,
-  SendPaymentInstructionEmailDto
+  SendPaymentInstructionEmailDto,
+  SendContractEmailDto
 } from './dto/send-email.dto';
 
 @ApiTags('email')
@@ -230,6 +231,46 @@ export class EmailController {
         };
       } else {
         throw new HttpException('Erro ao enviar email', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException('Erro interno do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post('contract')
+  @ApiOperation({ summary: 'Enviar contrato em PDF por email para um inscrito' })
+  @ApiResponse({ status: 200, description: 'Contrato enviado com sucesso' })
+  @ApiResponse({ status: 404, description: 'Inscrição não encontrada' })
+  @ApiResponse({ status: 500, description: 'Erro ao enviar contrato' })
+  async sendContract(@Body() dto: SendContractEmailDto) {
+    try {
+      const inscricao = await this.inscricoesService.findOne(parseInt(dto.inscricaoId));
+
+      if (!inscricao) {
+        throw new HttpException('Inscrição não encontrada', HttpStatus.NOT_FOUND);
+      }
+
+      const success = await this.emailService.sendContractEmail(inscricao, {
+        contractUrl: dto.contractUrl,
+        contractPath: dto.contractPath,
+        filename: dto.filename,
+      });
+
+      if (success) {
+        return {
+          success: true,
+          message: 'Contrato enviado com sucesso',
+          inscricao: {
+            id: inscricao.id,
+            fullName: inscricao.fullName,
+            email: inscricao.email,
+          },
+        };
+      } else {
+        throw new HttpException('Erro ao enviar contrato', HttpStatus.INTERNAL_SERVER_ERROR);
       }
     } catch (error) {
       if (error instanceof HttpException) {

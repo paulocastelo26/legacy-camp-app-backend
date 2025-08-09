@@ -60,3 +60,25 @@ export class SendPaymentInstructionEmailDto {
   inscricaoId: string;
 
 }
+
+export class SendContractEmailDto {
+  @ApiProperty({ description: 'ID da inscrição' })
+  @IsNotEmpty()
+  @IsString()
+  inscricaoId: string;
+
+  @ApiProperty({ description: 'URL do PDF do contrato (opcional, se não usar env CONTRACT_PDF_URL/CONTRACT_PDF_PATH)', required: false })
+  @IsOptional()
+  @IsString()
+  contractUrl?: string;
+
+  @ApiProperty({ description: 'Caminho local do PDF do contrato (opcional)', required: false })
+  @IsOptional()
+  @IsString()
+  contractPath?: string;
+
+  @ApiProperty({ description: 'Nome do arquivo do contrato (opcional)', required: false })
+  @IsOptional()
+  @IsString()
+  filename?: string;
+}

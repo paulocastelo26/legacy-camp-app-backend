@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Inscricao } from '../inscricoes/entities/inscricao.entity';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class EmailService {
@@ -53,6 +55,55 @@ export class EmailService {
     //     pass: this.configService.get<string>('EMAIL_PASSWORD'),
     //   },
     // });
+  }
+
+  async sendContractEmail(
+    inscricao: Inscricao,
+    options?: { contractUrl?: string; contractPath?: string; filename?: string }
+  ): Promise<boolean> {
+    try {
+      const fallbackUrl = this.configService.get<string>('CONTRACT_PDF_URL');
+      const fallbackPath = this.configService.get<string>('CONTRACT_PDF_PATH');
+      const filename = options?.filename || 'Contrato Legacy Camp.pdf';
+
+      let attachmentSource = options?.contractUrl || fallbackUrl || options?.contractPath || fallbackPath;
+
+      // Fallback: procurar arquivo padrão na pasta public com o nome informado pelo usuário
+      if (!attachmentSource) {
+        const defaultPublicPath = path.resolve(
+          process.cwd(),
+          'public',
+          'CONTRATO PARTICIPAÇÃO LEGACY CAMP MANAUS 25.pdf'
+        );
+        if (fs.existsSync(defaultPublicPath)) {
+          attachmentSource = defaultPublicPath;
+        }
+      }
+
+      if (!attachmentSource) {
+        throw new Error('Caminho/URL do contrato PDF não configurado. Defina CONTRACT_PDF_URL ou CONTRACT_PDF_PATH, ou informe via request.');
+      }
+
+      const mailOptions = {
+        from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
+        to: inscricao.email,
+        subject: '📄 Contrato - Legacy Camp',
+        html: this.generateContractEmailHTML(inscricao),
+        attachments: [
+          {
+            filename,
+            path: attachmentSource,
+          },
+        ],
+      } as nodemailer.SendMailOptions;
+
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Contrato enviado para ${inscricao.email}`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Erro ao enviar contrato: ${error.message}`);
+      return false;
+    }
   }
 
   async sendWelcomeEmail(inscricao: Inscricao): Promise<boolean> {
@@ -331,6 +382,42 @@ export class EmailService {
             </div>
 
             <p>Atenciosamente,<br>Equipe Legacy Camp</p>
+          </div>
+          <div class="footer">
+            <p>Legacy Camp - Transformando vidas através de experiências únicas</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  private generateContractEmailHTML(inscricao: Inscricao): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Contrato - Legacy Camp</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>📄 Contrato - Legacy Camp</h1>
+          </div>
+          <div class="content">
+            <h2>Olá, ${inscricao.fullName}!</h2>
+            <p>Segue em anexo o contrato referente à sua inscrição no Legacy Camp.</p>
+            <p>Por favor, revise o documento com atenção. Caso haja instruções de assinatura e devolução, siga-as conforme orientado pela equipe.</p>
+            <p>Em caso de dúvidas, entre em contato:</p>
+            <p>📞 +55 92 8409-5783<br/>✉ lgcymanaus@gmail.com</p>
           </div>
           <div class="footer">
             <p>Legacy Camp - Transformando vidas através de experiências únicas</p>
