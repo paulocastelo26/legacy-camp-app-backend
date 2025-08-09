@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { InscricoesModule } from './inscricoes/inscricoes.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { InscricoesModule } from './inscricoes/inscricoes.module';
       logging: process.env.NODE_ENV !== 'production',
     }),
     InscricoesModule,
+    EmailModule,
   ],
 })
 export class AppModule {} 

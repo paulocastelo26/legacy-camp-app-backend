@@ -1,0 +1,19 @@
+{
+  "email_welcome": {
+    "inscricaoId": "1"
+  },
+  "email_status_update": {
+    "inscricaoId": "1",
+    "newStatus": "APROVADA"
+  },
+  "email_custom": {
+    "inscricaoId": "1",
+    "subject": "📢 Informações Importantes - Legacy Camp",
+    "message": "Olá! Temos algumas informações importantes para compartilhar com você sobre o Legacy Camp.\n\n• Data do evento: 15-17 de março de 2024\n• Local: Sítio Recanto das Águas\n• Horário de chegada: 14h do dia 15\n\nQualquer dúvida, entre em contato conosco.\n\nAtenciosamente,\nEquipe Legacy Camp"
+  },
+  "email_bulk": {
+    "inscricaoIds": ["1", "2", "3"],
+    "subject": "🎉 Confirmação de Pagamento - Legacy Camp",
+    "message": "Olá! Confirmamos o recebimento do seu pagamento.\n\nSua inscrição está confirmada e você está oficialmente participando do Legacy Camp!\n\nEm breve enviaremos mais detalhes sobre o evento.\n\nAtenciosamente,\nEquipe Legacy Camp"
+  }
+}

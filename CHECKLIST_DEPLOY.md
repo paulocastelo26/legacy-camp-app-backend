@@ -29,14 +29,21 @@
 ### 3. Variáveis de Ambiente
 Preparar para adicionar no Railway:
 ```env
+# Banco de Dados
 DB_HOST=_________________
 DB_PORT=3306
 DB_USERNAME=_________________
 DB_PASSWORD=_________________
 DB_DATABASE=legacy_camp
+
+# Aplicação
 PORT=3000
 NODE_ENV=production
 FRONTEND_URL=https://seu-frontend.vercel.app
+
+# Email (Gmail)
+EMAIL_USER=seu-email@gmail.com
+EMAIL_PASSWORD=sua-app-password
 ```
 
 ## 🚀 Deploy
