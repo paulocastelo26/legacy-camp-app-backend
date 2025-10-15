@@ -79,4 +79,10 @@ export class InscricoesService {
       rejeitadas,
     };
   }
+
+  async getCountByCoupon(couponCode: string): Promise<number> {
+    return await this.inscricaoRepository.count({
+      where: { couponCode },
+    });
+  }
 } 

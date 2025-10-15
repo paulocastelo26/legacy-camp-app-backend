@@ -32,6 +32,18 @@ export class InscricoesController {
     return await this.inscricoesService.getStats();
   }
 
+  @Get('cupom/:codigo/count')
+  @ApiOperation({ summary: 'Contar inscrições por cupom' })
+  @ApiParam({ name: 'codigo', description: 'Código do cupom', example: 'LGCYBV200' })
+  @ApiResponse({ status: 200, description: 'Quantidade de inscrições com o cupom' })
+  async getCountByCoupon(@Param('codigo') codigo: string): Promise<{ couponCode: string; count: number }> {
+    const count = await this.inscricoesService.getCountByCoupon(codigo);
+    return {
+      couponCode: codigo,
+      count,
+    };
+  }
+
   @Get('status/:status')
   @ApiOperation({ summary: 'Listar inscrições por status' })
   @ApiParam({ name: 'status', description: 'Status das inscrições' })

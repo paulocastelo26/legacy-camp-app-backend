@@ -77,6 +77,11 @@ export class CreateInscricaoDto {
   @IsString()
   paymentProof?: string;
 
+  @ApiProperty({ description: 'Código do cupom de desconto', required: false, example: 'LGCYBV200' })
+  @IsOptional()
+  @IsString()
+  couponCode?: string;
+
   // Informações Adicionais
   @ApiProperty({ description: 'Tamanho da camisa', enum: ['P', 'M', 'G', 'GG', 'XG'] })
   @IsIn(['P', 'M', 'G', 'GG', 'XG'])

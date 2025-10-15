@@ -60,6 +60,9 @@ export class Inscricao {
   @Column({ length: 255, nullable: true })
   paymentProof: string;
 
+  @Column({ length: 50, nullable: true })
+  couponCode: string;
+
   // Informações Adicionais
   @Column({ length: 10 })
   shirtSize: string;
