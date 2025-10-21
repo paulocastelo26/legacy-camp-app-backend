@@ -365,7 +365,7 @@ export class EmailController {
         emailHost: {
           configured: !!emailHost,
           value: emailHost || 'Gmail (service)',
-          status: emailHost ? '✅ Configurado' : '📧 Usando Gmail'
+          status: emailHost || '📧 Usando Gmail'
         },
         emailPort: {
           configured: !!emailPort,
@@ -392,5 +392,69 @@ export class EmailController {
         }
       }
     };
+  }
+
+  @Get('test-resend')
+  @ApiOperation({ summary: 'Testar envio de email via Resend com logs detalhados' })
+  @ApiResponse({ status: 200, description: 'Teste de Resend executado' })
+  async testResend() {
+    try {
+      const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
+      const emailUser = this.configService.get<string>('EMAIL_USER');
+      
+      if (!resendApiKey) {
+        return {
+          success: false,
+          message: 'RESEND_API_KEY não configurado',
+          error: 'Configure RESEND_API_KEY no Railway Dashboard'
+        };
+      }
+
+      if (!emailUser) {
+        return {
+          success: false,
+          message: 'EMAIL_USER não configurado',
+          error: 'Configure EMAIL_USER no Railway Dashboard'
+        };
+      }
+
+      // Teste simples do Resend
+      const { Resend } = await import('resend');
+      const resend = new Resend(resendApiKey);
+      
+      const testEmail = 'test@example.com'; // Email de teste
+      const fromEmail = emailUser;
+      
+      const result = await resend.emails.send({
+        from: `Legacy Camp <${fromEmail}>`,
+        to: [testEmail],
+        subject: '🧪 Teste Resend - Legacy Camp',
+        html: '<h1>Teste de Email</h1><p>Este é um teste do Resend.</p>',
+      });
+
+      return {
+        success: true,
+        message: 'Teste do Resend executado',
+        details: {
+          from: fromEmail,
+          to: testEmail,
+          result: result,
+          messageId: result.data?.id,
+          error: result.error
+        },
+        recommendations: [
+          'Verifique os logs detalhados acima',
+          'Confirme se o domínio está verificado no Resend',
+          'Teste com um email real usando /email/test/1'
+        ]
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Erro ao testar Resend',
+        error: error.message,
+        details: error
+      };
+    }
   }
 }

@@ -257,15 +257,32 @@ export class EmailService {
 
         if (this.useResend) {
           // Usar Resend para Railway
+          const emailUser = this.configService.get<string>('EMAIL_USER');
+          const fromEmail = emailUser || 'noreply@legacycamp.com';
+          
+          this.logger.log(`📤 Enviando via Resend: de=${fromEmail}, para=${inscricao.email}, assunto=${subject}`);
+          
           const result = await this.resend.emails.send({
-            from: `Legacy Camp <${this.configService.get<string>('EMAIL_USER')}>`,
+            from: `Legacy Camp <${fromEmail}>`,
             to: [inscricao.email],
             subject: subject,
             html: htmlContent,
           });
           
           this.logger.log(`✅ Email de ${emailType} enviado com sucesso via Resend para ${inscricao.email} (tentativa ${attempt})`);
-          this.logger.debug(`📧 Message ID: ${result.data?.id}`);
+          
+          if (result.data?.id) {
+            this.logger.log(`📧 Message ID: ${result.data.id}`);
+          } else {
+            this.logger.warn(`⚠️ Message ID não retornado pelo Resend`);
+          }
+          
+          if (result.error) {
+            this.logger.error(`❌ Erro do Resend: ${JSON.stringify(result.error)}`);
+            throw new Error(`Resend error: ${result.error.message}`);
+          }
+          
+          this.logger.log(`📊 Resposta completa do Resend: ${JSON.stringify(result)}`);
           
           return true;
         } else {
