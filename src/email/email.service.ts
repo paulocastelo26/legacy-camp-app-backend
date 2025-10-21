@@ -18,34 +18,43 @@ export class EmailService {
     inscricao: Inscricao,
     options?: { paymentLink?: string }
   ): Promise<boolean> {
-    try {
-      const mailOptions = {
-        from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
-        to: inscricao.email,
-        subject: '📌 Instruções de pagamento - Legacy Camp',
-        html: this.generatePaymentInstructionEmailHTML(inscricao, options),
-      };
-
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Email de instruções de pagamento enviado para ${inscricao.email}`);
-      return true;
-    } catch (error) {
-      this.logger.error(`Erro ao enviar email de instruções de pagamento: ${error.message}`);
-      return false;
-    }
+    return await this.sendEmailWithRetry(
+      inscricao,
+      '📌 Instruções de pagamento - Legacy Camp',
+      this.generatePaymentInstructionEmailHTML(inscricao, options),
+      'instruções de pagamento'
+    );
   }
 
   private initializeTransporter() {
-    // Configuração para Gmail (recomendado para testes)
+    // Configuração otimizada para Railway e outros ambientes de produção
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: this.configService.get<string>('EMAIL_USER'),
         pass: this.configService.get<string>('EMAIL_PASSWORD'), // Use App Password para Gmail
       },
+      // Configurações para resolver problemas de timeout no Railway
+      connectionTimeout: 60000, // 60 segundos
+      greetingTimeout: 30000,   // 30 segundos
+      socketTimeout: 60000,     // 60 segundos
+      // Configurações TLS para melhor compatibilidade
+      tls: {
+        rejectUnauthorized: false,
+        ciphers: 'SSLv3'
+      },
+      // Pool de conexões para melhor performance
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      rateDelta: 20000, // 20 segundos entre envios
+      rateLimit: 5,     // máximo 5 emails por rateDelta
     });
 
-    // Configuração alternativa para outros provedores
+    // Verificar conexão na inicialização
+    this.verifyConnection();
+
+    // Configuração alternativa comentada para outros provedores
     // this.transporter = nodemailer.createTransport({
     //   host: this.configService.get<string>('EMAIL_HOST'),
     //   port: this.configService.get<number>('EMAIL_PORT'),
@@ -54,7 +63,23 @@ export class EmailService {
     //     user: this.configService.get<string>('EMAIL_USER'),
     //     pass: this.configService.get<string>('EMAIL_PASSWORD'),
     //   },
+    //   connectionTimeout: 60000,
+    //   greetingTimeout: 30000,
+    //   socketTimeout: 60000,
+    //   tls: {
+    //     rejectUnauthorized: false,
+    //   },
     // });
+  }
+
+  private async verifyConnection(): Promise<void> {
+    try {
+      await this.transporter.verify();
+      this.logger.log('✅ Conexão com servidor de email verificada com sucesso');
+    } catch (error) {
+      this.logger.error(`❌ Erro ao verificar conexão com servidor de email: ${error.message}`);
+      this.logger.error('Verifique as configurações EMAIL_USER e EMAIL_PASSWORD');
+    }
   }
 
   async sendContractEmail(
@@ -107,57 +132,78 @@ export class EmailService {
   }
 
   async sendWelcomeEmail(inscricao: Inscricao): Promise<boolean> {
-    try {
-      const mailOptions = {
-        from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
-        to: inscricao.email,
-        subject: '🎉 Bem-vindo ao Legacy Camp!',
-        html: this.generateWelcomeEmailHTML(inscricao),
-      };
-
-      const result = await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Email de boas-vindas enviado para ${inscricao.email}`);
-      return true;
-    } catch (error) {
-      this.logger.error(`Erro ao enviar email de boas-vindas: ${error.message}`);
-      return false;
-    }
+    return await this.sendEmailWithRetry(
+      inscricao,
+      '🎉 Bem-vindo ao Legacy Camp!',
+      this.generateWelcomeEmailHTML(inscricao),
+      'boas-vindas'
+    );
   }
 
   async sendStatusUpdateEmail(inscricao: Inscricao, newStatus: string): Promise<boolean> {
-    try {
-      const mailOptions = {
-        from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
-        to: inscricao.email,
-        subject: `📋 Atualização de Status - Legacy Camp`,
-        html: this.generateStatusUpdateEmailHTML(inscricao, newStatus),
-      };
-
-      const result = await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Email de atualização de status enviado para ${inscricao.email}`);
-      return true;
-    } catch (error) {
-      this.logger.error(`Erro ao enviar email de atualização: ${error.message}`);
-      return false;
-    }
+    return await this.sendEmailWithRetry(
+      inscricao,
+      `📋 Atualização de Status - Legacy Camp`,
+      this.generateStatusUpdateEmailHTML(inscricao, newStatus),
+      'atualização de status'
+    );
   }
 
   async sendCustomEmail(inscricao: Inscricao, subject: string, message: string): Promise<boolean> {
-    try {
-      const mailOptions = {
-        from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
-        to: inscricao.email,
-        subject: subject,
-        html: this.generateCustomEmailHTML(inscricao, message),
-      };
+    return await this.sendEmailWithRetry(
+      inscricao,
+      subject,
+      this.generateCustomEmailHTML(inscricao, message),
+      'personalizado'
+    );
+  }
 
-      const result = await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Email personalizado enviado para ${inscricao.email}`);
-      return true;
-    } catch (error) {
-      this.logger.error(`Erro ao enviar email personalizado: ${error.message}`);
-      return false;
+  private async sendEmailWithRetry(
+    inscricao: Inscricao,
+    subject: string,
+    htmlContent: string,
+    emailType: string,
+    maxRetries: number = 3
+  ): Promise<boolean> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        this.logger.log(`📧 Tentativa ${attempt}/${maxRetries} - Enviando email de ${emailType} para ${inscricao.email}`);
+
+        const mailOptions = {
+          from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
+          to: inscricao.email,
+          subject: subject,
+          html: htmlContent,
+        };
+
+        const result = await this.transporter.sendMail(mailOptions);
+        
+        this.logger.log(`✅ Email de ${emailType} enviado com sucesso para ${inscricao.email} (tentativa ${attempt})`);
+        this.logger.debug(`📧 Message ID: ${result.messageId}`);
+        
+        return true;
+      } catch (error) {
+        lastError = error;
+        this.logger.error(`❌ Tentativa ${attempt}/${maxRetries} falhou para ${inscricao.email}: ${error.message}`);
+        
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+          this.logger.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
+          await this.sleep(delay);
+        }
+      }
     }
+
+    this.logger.error(`💥 Falha definitiva ao enviar email de ${emailType} para ${inscricao.email} após ${maxRetries} tentativas`);
+    this.logger.error(`🔍 Último erro: ${lastError?.message}`);
+    
+    return false;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private generateWelcomeEmailHTML(inscricao: Inscricao): string {
