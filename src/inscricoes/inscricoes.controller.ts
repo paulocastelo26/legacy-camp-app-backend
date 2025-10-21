@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, HttpStatus, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { Response } from 'express';
 import { InscricoesService } from './inscricoes.service';
 import { CreateInscricaoDto } from './dto/create-inscricao.dto';
 import { UpdateInscricaoDto } from './dto/update-inscricao.dto';
@@ -30,6 +31,34 @@ export class InscricoesController {
   @ApiResponse({ status: 200, description: 'Estatísticas das inscrições' })
   async getStats(): Promise<any> {
     return await this.inscricoesService.getStats();
+  }
+
+  @Get('export/excel')
+  @ApiOperation({ summary: 'Exportar inscrições para Excel' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Arquivo Excel com todas as inscrições',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportToExcel(@Res() res: Response): Promise<void> {
+    const excelBuffer = await this.inscricoesService.exportToExcel();
+    
+    const filename = `inscricoes_${new Date().toISOString().split('T')[0]}.xlsx`;
+    
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': excelBuffer.length.toString(),
+    });
+    
+    res.send(excelBuffer);
   }
 
   @Get('cupom/:codigo/count')
