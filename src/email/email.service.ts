@@ -27,59 +27,120 @@ export class EmailService {
   }
 
   private initializeTransporter() {
-    // Configuração otimizada para Railway e outros ambientes de produção
-    this.transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: this.configService.get<string>('EMAIL_USER'),
-        pass: this.configService.get<string>('EMAIL_PASSWORD'), // Use App Password para Gmail
-      },
-      // Configurações para resolver problemas de timeout no Railway
-      connectionTimeout: 60000, // 60 segundos
-      greetingTimeout: 30000,   // 30 segundos
-      socketTimeout: 60000,     // 60 segundos
-      // Configurações TLS para melhor compatibilidade
-      tls: {
-        rejectUnauthorized: false,
-        ciphers: 'SSLv3'
-      },
-      // Pool de conexões para melhor performance
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
-      rateDelta: 20000, // 20 segundos entre envios
-      rateLimit: 5,     // máximo 5 emails por rateDelta
-    });
+    const emailUser = this.configService.get<string>('EMAIL_USER');
+    const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
+    const emailHost = this.configService.get<string>('EMAIL_HOST');
+    const emailPort = this.configService.get<number>('EMAIL_PORT');
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+
+    // Debug detalhado das variáveis de ambiente
+    this.logger.log(`🔧 Inicializando transporter de email...`);
+    this.logger.log(`📧 Email User: ${emailUser ? '✅ Configurado' : '❌ NÃO CONFIGURADO'}`);
+    this.logger.log(`🔑 Email Password: ${emailPassword ? '✅ Configurado' : '❌ NÃO CONFIGURADO'}`);
+    this.logger.log(`🌍 Environment: ${nodeEnv || '❌ NÃO CONFIGURADO'}`);
+    this.logger.log(`🏠 Host: ${emailHost || 'Gmail (service)'}`);
+    this.logger.log(`🚂 Railway Environment: ${process.env.RAILWAY_ENVIRONMENT ? '✅ Detectado' : '❌ Não detectado'}`);
+    
+    // Verificar se as variáveis críticas estão presentes
+    if (!emailUser) {
+      this.logger.error(`❌ EMAIL_USER não está configurado!`);
+      this.logger.error(`🔧 Configure a variável EMAIL_USER no Railway Dashboard`);
+    }
+    
+    if (!emailPassword) {
+      this.logger.error(`❌ EMAIL_PASSWORD não está configurado!`);
+      this.logger.error(`🔧 Configure a variável EMAIL_PASSWORD no Railway Dashboard`);
+    }
+
+    // Configuração específica para Railway e produção
+    if (nodeEnv === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+      this.logger.log(`🚂 Configuração para Railway/Produção detectada`);
+      
+      // Tentar configuração manual do Gmail primeiro (mais confiável no Railway)
+      this.transporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false, // true para 465, false para outras portas
+        auth: {
+          user: emailUser,
+          pass: emailPassword,
+        },
+        // Configurações otimizadas para Railway
+        connectionTimeout: 30000, // 30 segundos
+        greetingTimeout: 15000,   // 15 segundos
+        socketTimeout: 30000,     // 30 segundos
+        // Configurações TLS específicas para Railway
+        tls: {
+          rejectUnauthorized: false,
+          ciphers: 'SSLv3',
+          servername: 'smtp.gmail.com'
+        },
+        // Pool de conexões menor para Railway
+        pool: true,
+        maxConnections: 2,
+        maxMessages: 50,
+        rateDelta: 30000, // 30 segundos entre envios
+        rateLimit: 3,     // máximo 3 emails por período
+        // Configurações adicionais para estabilidade
+        debug: false,
+        logger: false,
+      });
+    } else {
+      // Configuração para desenvolvimento local
+      this.logger.log(`💻 Configuração para desenvolvimento local`);
+      
+      this.transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: emailUser,
+          pass: emailPassword,
+        },
+        connectionTimeout: 60000,
+        greetingTimeout: 30000,
+        socketTimeout: 60000,
+        tls: {
+          rejectUnauthorized: false,
+          ciphers: 'SSLv3'
+        },
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
+        rateDelta: 20000,
+        rateLimit: 5,
+      });
+    }
 
     // Verificar conexão na inicialização
     this.verifyConnection();
-
-    // Configuração alternativa comentada para outros provedores
-    // this.transporter = nodemailer.createTransport({
-    //   host: this.configService.get<string>('EMAIL_HOST'),
-    //   port: this.configService.get<number>('EMAIL_PORT'),
-    //   secure: true, // true para 465, false para outras portas
-    //   auth: {
-    //     user: this.configService.get<string>('EMAIL_USER'),
-    //     pass: this.configService.get<string>('EMAIL_PASSWORD'),
-    //   },
-    //   connectionTimeout: 60000,
-    //   greetingTimeout: 30000,
-    //   socketTimeout: 60000,
-    //   tls: {
-    //     rejectUnauthorized: false,
-    //   },
-    // });
   }
 
   private async verifyConnection(): Promise<void> {
-    try {
-      await this.transporter.verify();
-      this.logger.log('✅ Conexão com servidor de email verificada com sucesso');
-    } catch (error) {
-      this.logger.error(`❌ Erro ao verificar conexão com servidor de email: ${error.message}`);
-      this.logger.error('Verifique as configurações EMAIL_USER e EMAIL_PASSWORD');
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        this.logger.log(`🔍 Tentativa ${attempt}/${maxRetries} - Verificando conexão com servidor de email...`);
+        
+        await this.transporter.verify();
+        this.logger.log('✅ Conexão com servidor de email verificada com sucesso');
+        return;
+      } catch (error) {
+        lastError = error;
+        this.logger.error(`❌ Tentativa ${attempt}/${maxRetries} falhou: ${error.message}`);
+        
+        if (attempt < maxRetries) {
+          const delay = attempt * 2000; // 2s, 4s, 6s
+          this.logger.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
+          await this.sleep(delay);
+        }
+      }
     }
+
+    this.logger.error(`💥 Falha ao verificar conexão após ${maxRetries} tentativas`);
+    this.logger.error(`🔍 Último erro: ${lastError?.message}`);
+    this.logger.warn(`⚠️ O serviço continuará funcionando, mas emails podem falhar`);
+    this.logger.warn(`🔧 Verifique as configurações EMAIL_USER e EMAIL_PASSWORD`);
   }
 
   async sendContractEmail(
@@ -188,6 +249,12 @@ export class EmailService {
         lastError = error;
         this.logger.error(`❌ Tentativa ${attempt}/${maxRetries} falhou para ${inscricao.email}: ${error.message}`);
         
+        // Se for erro de conexão, tentar recriar o transporter
+        if (error.message.includes('Connection timeout') || error.message.includes('ECONNRESET')) {
+          this.logger.warn(`🔄 Erro de conexão detectado, tentando recriar transporter...`);
+          await this.recreateTransporter();
+        }
+        
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
           this.logger.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
@@ -200,6 +267,27 @@ export class EmailService {
     this.logger.error(`🔍 Último erro: ${lastError?.message}`);
     
     return false;
+  }
+
+  private async recreateTransporter(): Promise<void> {
+    try {
+      this.logger.log(`🔄 Recriando transporter de email...`);
+      
+      // Fechar conexões existentes
+      if (this.transporter) {
+        this.transporter.close();
+      }
+      
+      // Aguardar um pouco antes de recriar
+      await this.sleep(2000);
+      
+      // Recriar transporter
+      this.initializeTransporter();
+      
+      this.logger.log(`✅ Transporter recriado com sucesso`);
+    } catch (error) {
+      this.logger.error(`❌ Erro ao recriar transporter: ${error.message}`);
+    }
   }
 
   private sleep(ms: number): Promise<void> {

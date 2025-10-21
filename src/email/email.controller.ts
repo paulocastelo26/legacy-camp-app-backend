@@ -1,5 +1,6 @@
 import { Controller, Post, Body, Param, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 import { EmailService } from './email.service';
 import { InscricoesService } from '../inscricoes/inscricoes.service';
 import { 
@@ -17,6 +18,7 @@ export class EmailController {
   constructor(
     private readonly emailService: EmailService,
     private readonly inscricoesService: InscricoesService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Post('welcome')
@@ -314,5 +316,61 @@ export class EmailController {
       }
       throw new HttpException('Erro interno do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  @Get('config')
+  @ApiOperation({ summary: 'Verificar configuração das variáveis de ambiente de email' })
+  @ApiResponse({ status: 200, description: 'Status das configurações de email' })
+  async checkEmailConfig() {
+    const emailUser = this.configService.get<string>('EMAIL_USER');
+    const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
+    const emailHost = this.configService.get<string>('EMAIL_HOST');
+    const emailPort = this.configService.get<number>('EMAIL_PORT');
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
+
+    return {
+      success: true,
+      message: 'Status das configurações de email',
+      config: {
+        emailUser: {
+          configured: !!emailUser,
+          value: emailUser ? `${emailUser.substring(0, 3)}***@${emailUser.split('@')[1]}` : 'NÃO CONFIGURADO',
+          status: emailUser ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
+        },
+        emailPassword: {
+          configured: !!emailPassword,
+          value: emailPassword ? `${emailPassword.substring(0, 4)}***` : 'NÃO CONFIGURADO',
+          status: emailPassword ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
+        },
+        environment: {
+          nodeEnv: nodeEnv || 'NÃO CONFIGURADO',
+          railwayEnv: railwayEnv || 'NÃO DETECTADO',
+          status: (nodeEnv === 'production' || railwayEnv) ? '🚂 Railway/Produção' : '💻 Desenvolvimento'
+        },
+        emailHost: {
+          configured: !!emailHost,
+          value: emailHost || 'Gmail (service)',
+          status: emailHost ? '✅ Configurado' : '📧 Usando Gmail'
+        },
+        emailPort: {
+          configured: !!emailPort,
+          value: emailPort || '587 (Gmail)',
+          status: emailPort ? '✅ Configurado' : '📧 Usando Gmail'
+        }
+      },
+      recommendations: {
+        issues: [
+          ...(emailUser ? [] : ['Configure EMAIL_USER no Railway Dashboard']),
+          ...(emailPassword ? [] : ['Configure EMAIL_PASSWORD no Railway Dashboard']),
+          ...(nodeEnv !== 'production' && !railwayEnv ? ['Configure NODE_ENV=production para Railway'] : [])
+        ],
+        nextSteps: [
+          'Verifique os logs de inicialização para mais detalhes',
+          'Teste o envio de email com /email/test/1',
+          'Monitore os logs em tempo real no Railway Dashboard'
+        ]
+      }
+    };
   }
 }
