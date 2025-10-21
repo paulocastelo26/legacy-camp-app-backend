@@ -322,13 +322,13 @@ export class EmailController {
       @ApiOperation({ summary: 'Verificar configuração das variáveis de ambiente de email' })
       @ApiResponse({ status: 200, description: 'Status das configurações de email' })
       async checkEmailConfig() {
-        const web3FormsAccessKey = this.configService.get<string>('WEB3FORMS_ACCESS_KEY');
+        const emailUser = this.configService.get<string>('EMAIL_USER');
+        const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
         const nodeEnv = this.configService.get<string>('NODE_ENV');
         const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
 
         const isRailway = nodeEnv === 'production' || railwayEnv;
-        const hasWeb3FormsKey = !!web3FormsAccessKey;
-        const willUseWeb3Forms = isRailway && hasWeb3FormsKey;
+        const hasEmailConfig = !!(emailUser && emailPassword);
 
         return {
           success: true,
@@ -339,31 +339,41 @@ export class EmailController {
               railwayEnv: railwayEnv || 'NÃO DETECTADO',
               status: isRailway ? '🚂 Railway/Produção' : '💻 Desenvolvimento'
             },
-            web3FormsConfig: {
-              accessKey: {
-                configured: !!web3FormsAccessKey,
-                status: web3FormsAccessKey ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
+            smtpConfig: {
+              emailUser: {
+                configured: !!emailUser,
+                status: emailUser ? `✅ ${emailUser}` : '❌ NÃO CONFIGURADO'
+              },
+              emailPassword: {
+                configured: !!emailPassword,
+                status: emailPassword ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
               }
             },
             emailService: {
-              willUse: willUseWeb3Forms ? '🚀 Web3Forms (100% GRATUITO)' : '📧 SMTP',
-              fromEmail: willUseWeb3Forms ? 'Legacy Camp via Web3Forms' : 'EMAIL_USER configurado'
+              willUse: '📧 SMTP Otimizado',
+              fromEmail: emailUser || 'EMAIL_USER não configurado',
+              environment: isRailway ? 'Railway/Produção' : 'Desenvolvimento Local'
             }
           },
           recommendations: {
             issues: [
-              ...(isRailway && !hasWeb3FormsKey ? ['Configure WEB3FORMS_ACCESS_KEY no Railway Dashboard'] : [])
+              ...(!hasEmailConfig ? ['Configure EMAIL_USER e EMAIL_PASSWORD'] : []),
+              ...(isRailway ? ['Railway pode bloquear SMTP - considere usar App Password do Gmail'] : [])
             ],
             nextSteps: [
               'Teste o envio de email com /email/test/1',
-              'Monitore os logs em tempo real no Railway Dashboard'
+              ...(isRailway ? ['Monitore os logs em tempo real no Railway Dashboard'] : ['Monitore os logs no terminal local'])
             ],
-            railwayInfo: {
-              message: isRailway && !hasWeb3FormsKey ? 'Railway bloqueia SMTP. Configure Web3Forms (GRATUITO).' : 'Configuração adequada.'
+            environmentInfo: {
+              message: isRailway ? 'Railway pode bloquear SMTP. Use App Password do Gmail!' : 'SMTP funciona perfeitamente localmente!'
             },
-            web3FormsInfo: {
-              message: 'Web3Forms é 100% GRATUITO - sem limites de emails!',
-              setup: '1. Acesse web3forms.com 2. Crie conta gratuita 3. Copie Access Key 4. Configure no Railway'
+            gmailSetup: {
+              message: 'Para Gmail, use App Password (não a senha normal)',
+              steps: [
+                '1. Ative verificação em duas etapas em myaccount.google.com',
+                '2. Gere uma App Password em "Segurança" > "Senhas de app"',
+                '3. Use a senha gerada (16 caracteres) como EMAIL_PASSWORD'
+              ]
             }
           }
         };

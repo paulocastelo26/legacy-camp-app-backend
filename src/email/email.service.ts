@@ -4,13 +4,11 @@ import * as nodemailer from 'nodemailer';
 import { Inscricao } from '../inscricoes/entities/inscricao.entity';
 import * as fs from 'fs';
 import * as path from 'path';
-import axios from 'axios';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
-  private useWeb3Forms: boolean = false;
 
   constructor(private configService: ConfigService) {
     this.initializeEmailService();
@@ -29,27 +27,8 @@ export class EmailService {
   }
 
   private initializeEmailService() {
-    const web3FormsAccessKey = this.configService.get<string>('WEB3FORMS_ACCESS_KEY');
-    const nodeEnv = this.configService.get<string>('NODE_ENV');
-    const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
-
     this.logger.log(`🔧 Inicializando serviço de email...`);
-    
-    const isRailway = nodeEnv === 'production' || railwayEnv;
-    
-    if (isRailway && web3FormsAccessKey) {
-      this.logger.log(`🚀 Railway + Web3Forms configurado - usando Web3Forms (100% GRATUITO)`);
-      this.useWeb3Forms = true;
-    } else if (isRailway && !web3FormsAccessKey) {
-      this.logger.warn(`⚠️ Railway sem Web3Forms - configure WEB3FORMS_ACCESS_KEY`);
-      this.logger.log(`📧 Tentando SMTP mesmo assim...`);
-      this.useWeb3Forms = false;
-      this.initializeTransporter();
-    } else {
-      this.logger.log(`💻 Desenvolvimento local - usando SMTP`);
-      this.useWeb3Forms = false;
-      this.initializeTransporter();
-    }
+    this.initializeTransporter();
   }
 
   private initializeTransporter() {
@@ -231,59 +210,26 @@ export class EmailService {
       try {
         this.logger.log(`📧 Tentativa ${attempt}/${maxRetries} - Enviando email de ${emailType} para ${inscricao.email}`);
 
-        if (this.useWeb3Forms) {
-          // Usar Web3Forms para Railway (100% GRATUITO)
-          this.logger.log(`📤 Enviando via Web3Forms: para=${inscricao.email}, assunto=${subject}`);
-          
-          const web3FormsAccessKey = this.configService.get<string>('WEB3FORMS_ACCESS_KEY');
-          
-          const emailData = {
-            access_key: web3FormsAccessKey,
-            name: inscricao.fullName,
-            email: inscricao.email,
-            subject: subject,
-            message: htmlContent,
-            reply_to: inscricao.email,
-            from_name: 'Legacy Camp',
-            botcheck: false
-          };
-          
-          const response = await axios.post('https://api.web3forms.com/submit', emailData, {
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            timeout: 30000
-          });
-          
-          if (response.data.success) {
-            this.logger.log(`✅ Email de ${emailType} enviado com sucesso via Web3Forms para ${inscricao.email} (tentativa ${attempt})`);
-            this.logger.debug(`📧 Message ID: ${response.data.messageId}`);
-            return true;
-          } else {
-            throw new Error(`Web3Forms error: ${response.data.message}`);
-          }
-        } else {
-          // Usar SMTP tradicional
-          const mailOptions = {
-            from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
-            to: inscricao.email,
-            subject: subject,
-            html: htmlContent,
-          };
+        // Usar SMTP otimizado
+        const mailOptions = {
+          from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
+          to: inscricao.email,
+          subject: subject,
+          html: htmlContent,
+        };
 
-          const result = await this.transporter.sendMail(mailOptions);
-          
-          this.logger.log(`✅ Email de ${emailType} enviado com sucesso via SMTP para ${inscricao.email} (tentativa ${attempt})`);
-          this.logger.debug(`📧 Message ID: ${result.messageId}`);
-          
-          return true;
-        }
+        const result = await this.transporter.sendMail(mailOptions);
+        
+        this.logger.log(`✅ Email de ${emailType} enviado com sucesso via SMTP para ${inscricao.email} (tentativa ${attempt})`);
+        this.logger.debug(`📧 Message ID: ${result.messageId}`);
+        
+        return true;
       } catch (error) {
         lastError = error;
         this.logger.error(`❌ Tentativa ${attempt}/${maxRetries} falhou para ${inscricao.email}: ${error.message}`);
         
         // Se for erro de conexão SMTP, tentar recriar o transporter
-        if (!this.useWeb3Forms && (error.message.includes('Connection timeout') || error.message.includes('ECONNRESET'))) {
+        if (error.message.includes('Connection timeout') || error.message.includes('ECONNRESET')) {
           this.logger.warn(`🔄 Erro de conexão SMTP detectado, tentando recriar transporter...`);
           await this.recreateTransporter();
         }
