@@ -318,112 +318,55 @@ export class EmailController {
     }
   }
 
-  @Get('config')
-  @ApiOperation({ summary: 'Verificar configuração das variáveis de ambiente de email' })
-  @ApiResponse({ status: 200, description: 'Status das configurações de email' })
-  async checkEmailConfig() {
-    const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
-    const nodeEnv = this.configService.get<string>('NODE_ENV');
-    const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
+      @Get('config')
+      @ApiOperation({ summary: 'Verificar configuração das variáveis de ambiente de email' })
+      @ApiResponse({ status: 200, description: 'Status das configurações de email' })
+      async checkEmailConfig() {
+        const web3FormsAccessKey = this.configService.get<string>('WEB3FORMS_ACCESS_KEY');
+        const nodeEnv = this.configService.get<string>('NODE_ENV');
+        const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
 
-    const isRailway = nodeEnv === 'production' || railwayEnv;
-    const hasResendKey = !!resendApiKey;
-    const willUseResend = isRailway && hasResendKey;
+        const isRailway = nodeEnv === 'production' || railwayEnv;
+        const hasWeb3FormsKey = !!web3FormsAccessKey;
+        const willUseWeb3Forms = isRailway && hasWeb3FormsKey;
 
-    return {
-      success: true,
-      message: 'Status das configurações de email',
-      config: {
-        environment: {
-          nodeEnv: nodeEnv || 'NÃO CONFIGURADO',
-          railwayEnv: railwayEnv || 'NÃO DETECTADO',
-          status: isRailway ? '🚂 Railway/Produção' : '💻 Desenvolvimento'
-        },
-        resendApiKey: {
-          configured: !!resendApiKey,
-          status: resendApiKey ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
-        },
-        emailService: {
-          willUse: willUseResend ? '🚀 Resend' : '📧 SMTP',
-          fromEmail: willUseResend ? 'noreply@resend.dev' : 'EMAIL_USER configurado'
-        }
-      },
-      recommendations: {
-        issues: [
-          ...(isRailway && !hasResendKey ? ['Configure RESEND_API_KEY no Railway Dashboard'] : [])
-        ],
-        nextSteps: [
-          'Teste o envio de email com /email/test/1',
-          'Monitore os logs em tempo real no Railway Dashboard'
-        ],
-        railwayInfo: {
-          message: isRailway && !hasResendKey ? 'Railway bloqueia SMTP. Configure RESEND_API_KEY.' : 'Configuração adequada.'
-        }
-      }
-    };
-  }
-
-  @Get('test-resend')
-  @ApiOperation({ summary: 'Testar envio de email via Resend com logs detalhados' })
-  @ApiResponse({ status: 200, description: 'Teste de Resend executado' })
-  async testResend() {
-    try {
-      const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
-      const emailUser = this.configService.get<string>('EMAIL_USER');
-      
-      if (!resendApiKey) {
         return {
-          success: false,
-          message: 'RESEND_API_KEY não configurado',
-          error: 'Configure RESEND_API_KEY no Railway Dashboard'
+          success: true,
+          message: 'Status das configurações de email',
+          config: {
+            environment: {
+              nodeEnv: nodeEnv || 'NÃO CONFIGURADO',
+              railwayEnv: railwayEnv || 'NÃO DETECTADO',
+              status: isRailway ? '🚂 Railway/Produção' : '💻 Desenvolvimento'
+            },
+            web3FormsConfig: {
+              accessKey: {
+                configured: !!web3FormsAccessKey,
+                status: web3FormsAccessKey ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
+              }
+            },
+            emailService: {
+              willUse: willUseWeb3Forms ? '🚀 Web3Forms (100% GRATUITO)' : '📧 SMTP',
+              fromEmail: willUseWeb3Forms ? 'Legacy Camp via Web3Forms' : 'EMAIL_USER configurado'
+            }
+          },
+          recommendations: {
+            issues: [
+              ...(isRailway && !hasWeb3FormsKey ? ['Configure WEB3FORMS_ACCESS_KEY no Railway Dashboard'] : [])
+            ],
+            nextSteps: [
+              'Teste o envio de email com /email/test/1',
+              'Monitore os logs em tempo real no Railway Dashboard'
+            ],
+            railwayInfo: {
+              message: isRailway && !hasWeb3FormsKey ? 'Railway bloqueia SMTP. Configure Web3Forms (GRATUITO).' : 'Configuração adequada.'
+            },
+            web3FormsInfo: {
+              message: 'Web3Forms é 100% GRATUITO - sem limites de emails!',
+              setup: '1. Acesse web3forms.com 2. Crie conta gratuita 3. Copie Access Key 4. Configure no Railway'
+            }
+          }
         };
       }
 
-      if (!emailUser) {
-        return {
-          success: false,
-          message: 'EMAIL_USER não configurado',
-          error: 'Configure EMAIL_USER no Railway Dashboard'
-        };
-      }
-
-      // Teste simples do Resend
-      const { Resend } = await import('resend');
-      const resend = new Resend(resendApiKey);
-      
-      const testEmail = 'test@example.com'; // Email de teste
-      const fromEmail = emailUser;
-      
-      const result = await resend.emails.send({
-        from: `Legacy Camp <${fromEmail}>`,
-        to: [testEmail],
-        subject: '🧪 Teste Resend - Legacy Camp',
-        html: '<h1>Teste de Email</h1><p>Este é um teste do Resend.</p>',
-      });
-
-      return {
-        success: true,
-        message: 'Teste do Resend executado',
-        details: {
-          from: fromEmail,
-          to: testEmail,
-          result: result,
-          messageId: result.data?.id,
-          error: result.error
-        },
-        recommendations: [
-          'Verifique os logs detalhados acima',
-          'Confirme se o domínio está verificado no Resend',
-          'Teste com um email real usando /email/test/1'
-        ]
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: 'Erro ao testar Resend',
-        error: error.message,
-        details: error
-      };
-    }
-  }
 }

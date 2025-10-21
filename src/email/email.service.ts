@@ -1,17 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
-import { Resend } from 'resend';
 import { Inscricao } from '../inscricoes/entities/inscricao.entity';
 import * as fs from 'fs';
 import * as path from 'path';
+import axios from 'axios';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
-  private resend: Resend;
-  private useResend: boolean = false;
+  private useWeb3Forms: boolean = false;
 
   constructor(private configService: ConfigService) {
     this.initializeEmailService();
@@ -30,27 +29,25 @@ export class EmailService {
   }
 
   private initializeEmailService() {
-    const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
+    const web3FormsAccessKey = this.configService.get<string>('WEB3FORMS_ACCESS_KEY');
     const nodeEnv = this.configService.get<string>('NODE_ENV');
     const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
 
     this.logger.log(`🔧 Inicializando serviço de email...`);
     
-    // Decidir qual serviço usar - SIMPLES
     const isRailway = nodeEnv === 'production' || railwayEnv;
     
-    if (isRailway && resendApiKey) {
-      this.logger.log(`🚀 Railway + Resend configurado - usando Resend`);
-      this.useResend = true;
-      this.resend = new Resend(resendApiKey);
-    } else if (isRailway && !resendApiKey) {
-      this.logger.warn(`⚠️ Railway sem Resend - configure RESEND_API_KEY`);
+    if (isRailway && web3FormsAccessKey) {
+      this.logger.log(`🚀 Railway + Web3Forms configurado - usando Web3Forms (100% GRATUITO)`);
+      this.useWeb3Forms = true;
+    } else if (isRailway && !web3FormsAccessKey) {
+      this.logger.warn(`⚠️ Railway sem Web3Forms - configure WEB3FORMS_ACCESS_KEY`);
       this.logger.log(`📧 Tentando SMTP mesmo assim...`);
-      this.useResend = false;
+      this.useWeb3Forms = false;
       this.initializeTransporter();
     } else {
       this.logger.log(`💻 Desenvolvimento local - usando SMTP`);
-      this.useResend = false;
+      this.useWeb3Forms = false;
       this.initializeTransporter();
     }
   }
@@ -62,32 +59,32 @@ export class EmailService {
 
     // Configuração específica para Railway e produção
     if (nodeEnv === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-      this.logger.log(`🚂 Configuração SMTP para Railway/Produção`);
+      this.logger.log(`🚂 Configuração SMTP otimizada para Railway`);
       
       this.transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 587,
-        secure: false,
+        port: 465, // Usar porta 465 (SSL) em vez de 587
+        secure: true, // SSL obrigatório
         auth: {
           user: emailUser,
           pass: emailPassword,
         },
-        connectionTimeout: 30000,
-        greetingTimeout: 15000,
-        socketTimeout: 30000,
+        connectionTimeout: 60000, // 60 segundos
+        greetingTimeout: 30000,   // 30 segundos
+        socketTimeout: 60000,     // 60 segundos
         tls: {
           rejectUnauthorized: false,
           ciphers: 'SSLv3',
           servername: 'smtp.gmail.com'
         },
-        pool: true,
-        maxConnections: 2,
-        maxMessages: 50,
-        rateDelta: 30000,
-        rateLimit: 3,
+        pool: false, // Desabilitar pool para Railway
+        maxConnections: 1,
+        maxMessages: 1,
+        rateDelta: 60000, // 60 segundos entre envios
+        rateLimit: 1,     // máximo 1 email por período
         debug: false,
         logger: false,
-      });
+      } as nodemailer.TransportOptions);
     } else {
       this.logger.log(`💻 Configuração SMTP para desenvolvimento local`);
       
@@ -109,7 +106,7 @@ export class EmailService {
         maxMessages: 100,
         rateDelta: 20000,
         rateLimit: 5,
-      });
+      } as nodemailer.TransportOptions);
     }
 
     // Verificar conexão na inicialização
@@ -234,29 +231,37 @@ export class EmailService {
       try {
         this.logger.log(`📧 Tentativa ${attempt}/${maxRetries} - Enviando email de ${emailType} para ${inscricao.email}`);
 
-        if (this.useResend) {
-          // Usar Resend para Railway - SEMPRE com domínio de teste para evitar problemas
-          this.logger.log(`📤 Enviando via Resend: de=noreply@resend.dev, para=${inscricao.email}, assunto=${subject}`);
+        if (this.useWeb3Forms) {
+          // Usar Web3Forms para Railway (100% GRATUITO)
+          this.logger.log(`📤 Enviando via Web3Forms: para=${inscricao.email}, assunto=${subject}`);
           
-          const result = await this.resend.emails.send({
-            from: 'Legacy Camp <noreply@resend.dev>',
-            to: [inscricao.email],
+          const web3FormsAccessKey = this.configService.get<string>('WEB3FORMS_ACCESS_KEY');
+          
+          const emailData = {
+            access_key: web3FormsAccessKey,
+            name: inscricao.fullName,
+            email: inscricao.email,
             subject: subject,
-            html: htmlContent,
+            message: htmlContent,
+            reply_to: inscricao.email,
+            from_name: 'Legacy Camp',
+            botcheck: false
+          };
+          
+          const response = await axios.post('https://api.web3forms.com/submit', emailData, {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            timeout: 30000
           });
           
-          this.logger.log(`✅ Email de ${emailType} enviado com sucesso via Resend para ${inscricao.email} (tentativa ${attempt})`);
-          
-          if (result.data?.id) {
-            this.logger.log(`📧 Message ID: ${result.data.id}`);
+          if (response.data.success) {
+            this.logger.log(`✅ Email de ${emailType} enviado com sucesso via Web3Forms para ${inscricao.email} (tentativa ${attempt})`);
+            this.logger.debug(`📧 Message ID: ${response.data.messageId}`);
+            return true;
+          } else {
+            throw new Error(`Web3Forms error: ${response.data.message}`);
           }
-          
-          if (result.error) {
-            this.logger.error(`❌ Erro do Resend: ${JSON.stringify(result.error)}`);
-            throw new Error(`Resend error: ${result.error.message}`);
-          }
-          
-          return true;
         } else {
           // Usar SMTP tradicional
           const mailOptions = {
@@ -278,7 +283,7 @@ export class EmailService {
         this.logger.error(`❌ Tentativa ${attempt}/${maxRetries} falhou para ${inscricao.email}: ${error.message}`);
         
         // Se for erro de conexão SMTP, tentar recriar o transporter
-        if (!this.useResend && (error.message.includes('Connection timeout') || error.message.includes('ECONNRESET'))) {
+        if (!this.useWeb3Forms && (error.message.includes('Connection timeout') || error.message.includes('ECONNRESET'))) {
           this.logger.warn(`🔄 Erro de conexão SMTP detectado, tentando recriar transporter...`);
           await this.recreateTransporter();
         }
