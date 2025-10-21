@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { Inscricao } from '../inscricoes/entities/inscricao.entity';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -9,9 +10,11 @@ import * as path from 'path';
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
+  private resend: Resend;
+  private useResend: boolean = false;
 
   constructor(private configService: ConfigService) {
-    this.initializeTransporter();
+    this.initializeEmailService();
   }
 
   async sendPaymentInstructionEmail(
@@ -26,20 +29,20 @@ export class EmailService {
     );
   }
 
-  private initializeTransporter() {
+  private initializeEmailService() {
     const emailUser = this.configService.get<string>('EMAIL_USER');
     const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
-    const emailHost = this.configService.get<string>('EMAIL_HOST');
-    const emailPort = this.configService.get<number>('EMAIL_PORT');
+    const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
     const nodeEnv = this.configService.get<string>('NODE_ENV');
+    const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
 
     // Debug detalhado das variáveis de ambiente
-    this.logger.log(`🔧 Inicializando transporter de email...`);
+    this.logger.log(`🔧 Inicializando serviço de email...`);
     this.logger.log(`📧 Email User: ${emailUser ? '✅ Configurado' : '❌ NÃO CONFIGURADO'}`);
     this.logger.log(`🔑 Email Password: ${emailPassword ? '✅ Configurado' : '❌ NÃO CONFIGURADO'}`);
+    this.logger.log(`🚀 Resend API Key: ${resendApiKey ? '✅ Configurado' : '❌ NÃO CONFIGURADO'}`);
     this.logger.log(`🌍 Environment: ${nodeEnv || '❌ NÃO CONFIGURADO'}`);
-    this.logger.log(`🏠 Host: ${emailHost || 'Gmail (service)'}`);
-    this.logger.log(`🚂 Railway Environment: ${process.env.RAILWAY_ENVIRONMENT ? '✅ Detectado' : '❌ Não detectado'}`);
+    this.logger.log(`🚂 Railway Environment: ${railwayEnv ? '✅ Detectado' : '❌ Não detectado'}`);
     
     // Verificar se as variáveis críticas estão presentes
     if (!emailUser) {
@@ -52,42 +55,62 @@ export class EmailService {
       this.logger.error(`🔧 Configure a variável EMAIL_PASSWORD no Railway Dashboard`);
     }
 
+    // Decidir qual serviço usar
+    const isRailway = nodeEnv === 'production' || railwayEnv;
+    const hasResendKey = !!resendApiKey;
+    
+    if (isRailway && hasResendKey) {
+      this.logger.log(`🚀 Usando Resend para Railway (recomendado)`);
+      this.useResend = true;
+      this.resend = new Resend(resendApiKey);
+    } else if (isRailway && !hasResendKey) {
+      this.logger.warn(`⚠️ Railway detectado mas RESEND_API_KEY não configurado`);
+      this.logger.warn(`🔧 Configure RESEND_API_KEY ou atualize para plano Pro do Railway`);
+      this.logger.log(`📧 Tentando usar SMTP mesmo assim...`);
+      this.useResend = false;
+      this.initializeTransporter();
+    } else {
+      this.logger.log(`💻 Usando SMTP para desenvolvimento local`);
+      this.useResend = false;
+      this.initializeTransporter();
+    }
+  }
+
+  private initializeTransporter() {
+    const emailUser = this.configService.get<string>('EMAIL_USER');
+    const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+
     // Configuração específica para Railway e produção
     if (nodeEnv === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-      this.logger.log(`🚂 Configuração para Railway/Produção detectada`);
+      this.logger.log(`🚂 Configuração SMTP para Railway/Produção`);
       
-      // Tentar configuração manual do Gmail primeiro (mais confiável no Railway)
       this.transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 587,
-        secure: false, // true para 465, false para outras portas
+        secure: false,
         auth: {
           user: emailUser,
           pass: emailPassword,
         },
-        // Configurações otimizadas para Railway
-        connectionTimeout: 30000, // 30 segundos
-        greetingTimeout: 15000,   // 15 segundos
-        socketTimeout: 30000,     // 30 segundos
-        // Configurações TLS específicas para Railway
+        connectionTimeout: 30000,
+        greetingTimeout: 15000,
+        socketTimeout: 30000,
         tls: {
           rejectUnauthorized: false,
           ciphers: 'SSLv3',
           servername: 'smtp.gmail.com'
         },
-        // Pool de conexões menor para Railway
         pool: true,
         maxConnections: 2,
         maxMessages: 50,
-        rateDelta: 30000, // 30 segundos entre envios
-        rateLimit: 3,     // máximo 3 emails por período
-        // Configurações adicionais para estabilidade
+        rateDelta: 30000,
+        rateLimit: 3,
         debug: false,
         logger: false,
       });
     } else {
-      // Configuração para desenvolvimento local
-      this.logger.log(`💻 Configuração para desenvolvimento local`);
+      this.logger.log(`💻 Configuração SMTP para desenvolvimento local`);
       
       this.transporter = nodemailer.createTransport({
         service: 'gmail',
@@ -232,26 +255,42 @@ export class EmailService {
       try {
         this.logger.log(`📧 Tentativa ${attempt}/${maxRetries} - Enviando email de ${emailType} para ${inscricao.email}`);
 
-        const mailOptions = {
-          from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
-          to: inscricao.email,
-          subject: subject,
-          html: htmlContent,
-        };
+        if (this.useResend) {
+          // Usar Resend para Railway
+          const result = await this.resend.emails.send({
+            from: `Legacy Camp <${this.configService.get<string>('EMAIL_USER')}>`,
+            to: [inscricao.email],
+            subject: subject,
+            html: htmlContent,
+          });
+          
+          this.logger.log(`✅ Email de ${emailType} enviado com sucesso via Resend para ${inscricao.email} (tentativa ${attempt})`);
+          this.logger.debug(`📧 Message ID: ${result.data?.id}`);
+          
+          return true;
+        } else {
+          // Usar SMTP tradicional
+          const mailOptions = {
+            from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
+            to: inscricao.email,
+            subject: subject,
+            html: htmlContent,
+          };
 
-        const result = await this.transporter.sendMail(mailOptions);
-        
-        this.logger.log(`✅ Email de ${emailType} enviado com sucesso para ${inscricao.email} (tentativa ${attempt})`);
-        this.logger.debug(`📧 Message ID: ${result.messageId}`);
-        
-        return true;
+          const result = await this.transporter.sendMail(mailOptions);
+          
+          this.logger.log(`✅ Email de ${emailType} enviado com sucesso via SMTP para ${inscricao.email} (tentativa ${attempt})`);
+          this.logger.debug(`📧 Message ID: ${result.messageId}`);
+          
+          return true;
+        }
       } catch (error) {
         lastError = error;
         this.logger.error(`❌ Tentativa ${attempt}/${maxRetries} falhou para ${inscricao.email}: ${error.message}`);
         
-        // Se for erro de conexão, tentar recriar o transporter
-        if (error.message.includes('Connection timeout') || error.message.includes('ECONNRESET')) {
-          this.logger.warn(`🔄 Erro de conexão detectado, tentando recriar transporter...`);
+        // Se for erro de conexão SMTP, tentar recriar o transporter
+        if (!this.useResend && (error.message.includes('Connection timeout') || error.message.includes('ECONNRESET'))) {
+          this.logger.warn(`🔄 Erro de conexão SMTP detectado, tentando recriar transporter...`);
           await this.recreateTransporter();
         }
         

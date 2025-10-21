@@ -324,10 +324,15 @@ export class EmailController {
   async checkEmailConfig() {
     const emailUser = this.configService.get<string>('EMAIL_USER');
     const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
+    const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
     const emailHost = this.configService.get<string>('EMAIL_HOST');
     const emailPort = this.configService.get<number>('EMAIL_PORT');
     const nodeEnv = this.configService.get<string>('NODE_ENV');
     const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
+
+    const isRailway = nodeEnv === 'production' || railwayEnv;
+    const hasResendKey = !!resendApiKey;
+    const willUseResend = isRailway && hasResendKey;
 
     return {
       success: true,
@@ -343,10 +348,19 @@ export class EmailController {
           value: emailPassword ? `${emailPassword.substring(0, 4)}***` : 'NÃO CONFIGURADO',
           status: emailPassword ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
         },
+        resendApiKey: {
+          configured: !!resendApiKey,
+          value: resendApiKey ? `${resendApiKey.substring(0, 8)}***` : 'NÃO CONFIGURADO',
+          status: resendApiKey ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
+        },
         environment: {
           nodeEnv: nodeEnv || 'NÃO CONFIGURADO',
           railwayEnv: railwayEnv || 'NÃO DETECTADO',
-          status: (nodeEnv === 'production' || railwayEnv) ? '🚂 Railway/Produção' : '💻 Desenvolvimento'
+          status: isRailway ? '🚂 Railway/Produção' : '💻 Desenvolvimento'
+        },
+        emailService: {
+          willUse: willUseResend ? '🚀 Resend (Recomendado para Railway)' : '📧 SMTP',
+          reason: willUseResend ? 'Railway + Resend configurado' : isRailway ? 'Railway sem Resend (pode ter problemas)' : 'Desenvolvimento local'
         },
         emailHost: {
           configured: !!emailHost,
@@ -363,13 +377,19 @@ export class EmailController {
         issues: [
           ...(emailUser ? [] : ['Configure EMAIL_USER no Railway Dashboard']),
           ...(emailPassword ? [] : ['Configure EMAIL_PASSWORD no Railway Dashboard']),
+          ...(isRailway && !hasResendKey ? ['Configure RESEND_API_KEY para Railway (recomendado)'] : []),
           ...(nodeEnv !== 'production' && !railwayEnv ? ['Configure NODE_ENV=production para Railway'] : [])
         ],
         nextSteps: [
           'Verifique os logs de inicialização para mais detalhes',
           'Teste o envio de email com /email/test/1',
-          'Monitore os logs em tempo real no Railway Dashboard'
-        ]
+          'Monitore os logs em tempo real no Railway Dashboard',
+          ...(isRailway && !hasResendKey ? ['Considere configurar Resend para evitar problemas de SMTP no Railway'] : [])
+        ],
+        railwayInfo: {
+          smtpBlocked: isRailway && !hasResendKey,
+          message: isRailway && !hasResendKey ? 'Railway bloqueia SMTP em planos gratuitos. Use Resend ou atualize para plano Pro.' : 'Configuração adequada para o ambiente.'
+        }
       }
     };
   }
