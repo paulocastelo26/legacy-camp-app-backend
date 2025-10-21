@@ -322,11 +322,7 @@ export class EmailController {
   @ApiOperation({ summary: 'Verificar configuração das variáveis de ambiente de email' })
   @ApiResponse({ status: 200, description: 'Status das configurações de email' })
   async checkEmailConfig() {
-    const emailUser = this.configService.get<string>('EMAIL_USER');
-    const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
     const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
-    const emailHost = this.configService.get<string>('EMAIL_HOST');
-    const emailPort = this.configService.get<number>('EMAIL_PORT');
     const nodeEnv = this.configService.get<string>('NODE_ENV');
     const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
 
@@ -338,57 +334,30 @@ export class EmailController {
       success: true,
       message: 'Status das configurações de email',
       config: {
-        emailUser: {
-          configured: !!emailUser,
-          value: emailUser ? `${emailUser.substring(0, 3)}***@${emailUser.split('@')[1]}` : 'NÃO CONFIGURADO',
-          status: emailUser ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
-        },
-        emailPassword: {
-          configured: !!emailPassword,
-          value: emailPassword ? `${emailPassword.substring(0, 4)}***` : 'NÃO CONFIGURADO',
-          status: emailPassword ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
-        },
-        resendApiKey: {
-          configured: !!resendApiKey,
-          value: resendApiKey ? `${resendApiKey.substring(0, 8)}***` : 'NÃO CONFIGURADO',
-          status: resendApiKey ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
-        },
         environment: {
           nodeEnv: nodeEnv || 'NÃO CONFIGURADO',
           railwayEnv: railwayEnv || 'NÃO DETECTADO',
           status: isRailway ? '🚂 Railway/Produção' : '💻 Desenvolvimento'
         },
+        resendApiKey: {
+          configured: !!resendApiKey,
+          status: resendApiKey ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
+        },
         emailService: {
-          willUse: willUseResend ? '🚀 Resend (Recomendado para Railway)' : '📧 SMTP',
-          reason: willUseResend ? 'Railway + Resend configurado' : isRailway ? 'Railway sem Resend (pode ter problemas)' : 'Desenvolvimento local'
-        },
-        emailHost: {
-          configured: !!emailHost,
-          value: emailHost || 'Gmail (service)',
-          status: emailHost || '📧 Usando Gmail'
-        },
-        emailPort: {
-          configured: !!emailPort,
-          value: emailPort || '587 (Gmail)',
-          status: emailPort ? '✅ Configurado' : '📧 Usando Gmail'
+          willUse: willUseResend ? '🚀 Resend' : '📧 SMTP',
+          fromEmail: willUseResend ? 'noreply@resend.dev' : 'EMAIL_USER configurado'
         }
       },
       recommendations: {
         issues: [
-          ...(emailUser ? [] : ['Configure EMAIL_USER no Railway Dashboard']),
-          ...(emailPassword ? [] : ['Configure EMAIL_PASSWORD no Railway Dashboard']),
-          ...(isRailway && !hasResendKey ? ['Configure RESEND_API_KEY para Railway (recomendado)'] : []),
-          ...(nodeEnv !== 'production' && !railwayEnv ? ['Configure NODE_ENV=production para Railway'] : [])
+          ...(isRailway && !hasResendKey ? ['Configure RESEND_API_KEY no Railway Dashboard'] : [])
         ],
         nextSteps: [
-          'Verifique os logs de inicialização para mais detalhes',
           'Teste o envio de email com /email/test/1',
-          'Monitore os logs em tempo real no Railway Dashboard',
-          ...(isRailway && !hasResendKey ? ['Considere configurar Resend para evitar problemas de SMTP no Railway'] : [])
+          'Monitore os logs em tempo real no Railway Dashboard'
         ],
         railwayInfo: {
-          smtpBlocked: isRailway && !hasResendKey,
-          message: isRailway && !hasResendKey ? 'Railway bloqueia SMTP em planos gratuitos. Use Resend ou atualize para plano Pro.' : 'Configuração adequada para o ambiente.'
+          message: isRailway && !hasResendKey ? 'Railway bloqueia SMTP. Configure RESEND_API_KEY.' : 'Configuração adequada.'
         }
       }
     };

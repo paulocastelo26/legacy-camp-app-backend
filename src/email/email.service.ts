@@ -30,47 +30,26 @@ export class EmailService {
   }
 
   private initializeEmailService() {
-    const emailUser = this.configService.get<string>('EMAIL_USER');
-    const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
     const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
     const nodeEnv = this.configService.get<string>('NODE_ENV');
     const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
 
-    // Debug detalhado das variáveis de ambiente
     this.logger.log(`🔧 Inicializando serviço de email...`);
-    this.logger.log(`📧 Email User: ${emailUser ? '✅ Configurado' : '❌ NÃO CONFIGURADO'}`);
-    this.logger.log(`🔑 Email Password: ${emailPassword ? '✅ Configurado' : '❌ NÃO CONFIGURADO'}`);
-    this.logger.log(`🚀 Resend API Key: ${resendApiKey ? '✅ Configurado' : '❌ NÃO CONFIGURADO'}`);
-    this.logger.log(`🌍 Environment: ${nodeEnv || '❌ NÃO CONFIGURADO'}`);
-    this.logger.log(`🚂 Railway Environment: ${railwayEnv ? '✅ Detectado' : '❌ Não detectado'}`);
     
-    // Verificar se as variáveis críticas estão presentes
-    if (!emailUser) {
-      this.logger.error(`❌ EMAIL_USER não está configurado!`);
-      this.logger.error(`🔧 Configure a variável EMAIL_USER no Railway Dashboard`);
-    }
-    
-    if (!emailPassword) {
-      this.logger.error(`❌ EMAIL_PASSWORD não está configurado!`);
-      this.logger.error(`🔧 Configure a variável EMAIL_PASSWORD no Railway Dashboard`);
-    }
-
-    // Decidir qual serviço usar
+    // Decidir qual serviço usar - SIMPLES
     const isRailway = nodeEnv === 'production' || railwayEnv;
-    const hasResendKey = !!resendApiKey;
     
-    if (isRailway && hasResendKey) {
-      this.logger.log(`🚀 Usando Resend para Railway (recomendado)`);
+    if (isRailway && resendApiKey) {
+      this.logger.log(`🚀 Railway + Resend configurado - usando Resend`);
       this.useResend = true;
       this.resend = new Resend(resendApiKey);
-    } else if (isRailway && !hasResendKey) {
-      this.logger.warn(`⚠️ Railway detectado mas RESEND_API_KEY não configurado`);
-      this.logger.warn(`🔧 Configure RESEND_API_KEY ou atualize para plano Pro do Railway`);
-      this.logger.log(`📧 Tentando usar SMTP mesmo assim...`);
+    } else if (isRailway && !resendApiKey) {
+      this.logger.warn(`⚠️ Railway sem Resend - configure RESEND_API_KEY`);
+      this.logger.log(`📧 Tentando SMTP mesmo assim...`);
       this.useResend = false;
       this.initializeTransporter();
     } else {
-      this.logger.log(`💻 Usando SMTP para desenvolvimento local`);
+      this.logger.log(`💻 Desenvolvimento local - usando SMTP`);
       this.useResend = false;
       this.initializeTransporter();
     }
@@ -256,14 +235,11 @@ export class EmailService {
         this.logger.log(`📧 Tentativa ${attempt}/${maxRetries} - Enviando email de ${emailType} para ${inscricao.email}`);
 
         if (this.useResend) {
-          // Usar Resend para Railway
-          const emailUser = this.configService.get<string>('EMAIL_USER');
-          const fromEmail = emailUser || 'noreply@legacycamp.com';
-          
-          this.logger.log(`📤 Enviando via Resend: de=${fromEmail}, para=${inscricao.email}, assunto=${subject}`);
+          // Usar Resend para Railway - SEMPRE com domínio de teste para evitar problemas
+          this.logger.log(`📤 Enviando via Resend: de=noreply@resend.dev, para=${inscricao.email}, assunto=${subject}`);
           
           const result = await this.resend.emails.send({
-            from: `Legacy Camp <${fromEmail}>`,
+            from: 'Legacy Camp <noreply@resend.dev>',
             to: [inscricao.email],
             subject: subject,
             html: htmlContent,
@@ -273,16 +249,12 @@ export class EmailService {
           
           if (result.data?.id) {
             this.logger.log(`📧 Message ID: ${result.data.id}`);
-          } else {
-            this.logger.warn(`⚠️ Message ID não retornado pelo Resend`);
           }
           
           if (result.error) {
             this.logger.error(`❌ Erro do Resend: ${JSON.stringify(result.error)}`);
             throw new Error(`Resend error: ${result.error.message}`);
           }
-          
-          this.logger.log(`📊 Resposta completa do Resend: ${JSON.stringify(result)}`);
           
           return true;
         } else {
