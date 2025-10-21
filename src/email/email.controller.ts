@@ -365,15 +365,26 @@ export class EmailController {
               ...(isRailway ? ['Monitore os logs em tempo real no Railway Dashboard'] : ['Monitore os logs no terminal local'])
             ],
             environmentInfo: {
-              message: isRailway ? 'Railway pode bloquear SMTP. Use App Password do Gmail!' : 'SMTP funciona perfeitamente localmente!'
+              message: isRailway ? 'Railway usa Outlook SMTP (funciona!)' : 'Local usa Gmail SMTP'
             },
-            gmailSetup: {
-              message: 'Para Gmail, use App Password (não a senha normal)',
-              steps: [
-                '1. Ative verificação em duas etapas em myaccount.google.com',
-                '2. Gere uma App Password em "Segurança" > "Senhas de app"',
-                '3. Use a senha gerada (16 caracteres) como EMAIL_PASSWORD'
-              ]
+            emailSetup: {
+              railway: {
+                message: 'Para Railway, use conta Outlook/Hotmail',
+                steps: [
+                  '1. Crie uma conta Outlook/Hotmail gratuita',
+                  '2. Use seu email Outlook como EMAIL_USER',
+                  '3. Use sua senha normal como EMAIL_PASSWORD',
+                  '4. Railway usa smtp-mail.outlook.com'
+                ]
+              },
+              local: {
+                message: 'Para desenvolvimento local, use Gmail com App Password',
+                steps: [
+                  '1. Ative verificação em duas etapas em myaccount.google.com',
+                  '2. Gere uma App Password em "Segurança" > "Senhas de app"',
+                  '3. Use a senha gerada (16 caracteres) como EMAIL_PASSWORD'
+                ]
+              }
             }
           }
         };

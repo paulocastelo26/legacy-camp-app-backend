@@ -38,29 +38,28 @@ export class EmailService {
 
     // Configuração específica para Railway e produção
     if (nodeEnv === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-      this.logger.log(`🚂 Configuração SMTP otimizada para Railway`);
+      this.logger.log(`🚂 Railway detectado - usando Outlook SMTP (funciona no Railway)`);
       
       this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465, // Usar porta 465 (SSL) em vez de 587
-        secure: true, // SSL obrigatório
+        host: 'smtp-mail.outlook.com',
+        port: 587,
+        secure: false, // TLS
         auth: {
           user: emailUser,
           pass: emailPassword,
         },
-        connectionTimeout: 60000, // 60 segundos
-        greetingTimeout: 30000,   // 30 segundos
-        socketTimeout: 60000,     // 60 segundos
+        connectionTimeout: 30000,
+        greetingTimeout: 15000,
+        socketTimeout: 30000,
         tls: {
           rejectUnauthorized: false,
-          ciphers: 'SSLv3',
-          servername: 'smtp.gmail.com'
+          ciphers: 'SSLv3'
         },
-        pool: false, // Desabilitar pool para Railway
+        pool: false,
         maxConnections: 1,
         maxMessages: 1,
-        rateDelta: 60000, // 60 segundos entre envios
-        rateLimit: 1,     // máximo 1 email por período
+        rateDelta: 30000,
+        rateLimit: 1,
         debug: false,
         logger: false,
       } as nodemailer.TransportOptions);
