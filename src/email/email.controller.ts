@@ -1,16 +1,9 @@
-import { Controller, Post, Body, Param, Get, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, HttpException, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
 import { EmailService } from './email.service';
 import { InscricoesService } from '../inscricoes/inscricoes.service';
-import { 
-  SendCustomEmailDto, 
-  SendWelcomeEmailDto, 
-  SendStatusUpdateEmailDto, 
-  SendBulkEmailDto,
-  SendPaymentInstructionEmailDto,
-  SendContractEmailDto
-} from './dto/send-email.dto';
+import { ConfigService } from '@nestjs/config';
+import { SendCustomEmailDto } from './dto/send-email.dto';
 
 @ApiTags('email')
 @Controller('email')
@@ -18,18 +11,17 @@ export class EmailController {
   constructor(
     private readonly emailService: EmailService,
     private readonly inscricoesService: InscricoesService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService
   ) {}
 
-  @Post('welcome')
-  @ApiOperation({ summary: 'Enviar email de boas-vindas para um inscrito' })
-  @ApiResponse({ status: 200, description: 'Email enviado com sucesso' })
+  @Get('test/:id')
+  @ApiOperation({ summary: 'Testar envio de email para uma inscrição específica' })
+  @ApiParam({ name: 'id', description: 'ID da inscrição' })
+  @ApiResponse({ status: 200, description: 'Email de teste enviado com sucesso' })
   @ApiResponse({ status: 404, description: 'Inscrição não encontrada' })
-  @ApiResponse({ status: 500, description: 'Erro ao enviar email' })
-  async sendWelcomeEmail(@Body() sendWelcomeEmailDto: SendWelcomeEmailDto) {
+  async testEmail(@Param('id') id: string) {
     try {
-      const inscricao = await this.inscricoesService.findOne(parseInt(sendWelcomeEmailDto.inscricaoId));
-      
+      const inscricao = await this.inscricoesService.findOne(+id);
       if (!inscricao) {
         throw new HttpException('Inscrição não encontrada', HttpStatus.NOT_FOUND);
       }
@@ -39,52 +31,16 @@ export class EmailController {
       if (success) {
         return {
           success: true,
-          message: 'Email de boas-vindas enviado com sucesso',
-          inscricao: {
-            id: inscricao.id,
-            fullName: inscricao.fullName,
-            email: inscricao.email
-          }
-        };
-      } else {
-        throw new HttpException('Erro ao enviar email', HttpStatus.INTERNAL_SERVER_ERROR);
-      }
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException('Erro interno do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  @Post('status-update')
-  @ApiOperation({ summary: 'Enviar email de atualização de status para um inscrito' })
-  @ApiResponse({ status: 200, description: 'Email enviado com sucesso' })
-  @ApiResponse({ status: 404, description: 'Inscrição não encontrada' })
-  @ApiResponse({ status: 500, description: 'Erro ao enviar email' })
-  async sendStatusUpdateEmail(@Body() sendStatusUpdateEmailDto: SendStatusUpdateEmailDto) {
-    try {
-      const inscricao = await this.inscricoesService.findOne(parseInt(sendStatusUpdateEmailDto.inscricaoId));
-      
-      if (!inscricao) {
-        throw new HttpException('Inscrição não encontrada', HttpStatus.NOT_FOUND);
-      }
-
-      const success = await this.emailService.sendStatusUpdateEmail(inscricao, sendStatusUpdateEmailDto.newStatus);
-      
-      if (success) {
-        return {
-          success: true,
-          message: 'Email de atualização de status enviado com sucesso',
+          message: `Email de teste enviado com sucesso para ${inscricao.email}`,
           inscricao: {
             id: inscricao.id,
             fullName: inscricao.fullName,
             email: inscricao.email,
-            newStatus: sendStatusUpdateEmailDto.newStatus
+            status: inscricao.status
           }
         };
       } else {
-        throw new HttpException('Erro ao enviar email', HttpStatus.INTERNAL_SERVER_ERROR);
+        throw new HttpException('Falha ao enviar email', HttpStatus.INTERNAL_SERVER_ERROR);
       }
     } catch (error) {
       if (error instanceof HttpException) {
@@ -94,41 +50,36 @@ export class EmailController {
     }
   }
 
-  @Post('custom')
-  @ApiOperation({ summary: 'Enviar email personalizado para um inscrito' })
+  @Post('send')
+  @ApiOperation({ summary: 'Enviar email personalizado para uma inscrição' })
   @ApiResponse({ status: 200, description: 'Email enviado com sucesso' })
+  @ApiResponse({ status: 400, description: 'Dados inválidos' })
   @ApiResponse({ status: 404, description: 'Inscrição não encontrada' })
-  @ApiResponse({ status: 500, description: 'Erro ao enviar email' })
-  async sendCustomEmail(@Body() sendCustomEmailDto: SendCustomEmailDto) {
+  async sendCustomEmail(@Body() sendEmailDto: SendCustomEmailDto) {
     try {
-      const inscricao = await this.inscricoesService.findOne(parseInt(sendCustomEmailDto.inscricaoId));
-      
+      const inscricao = await this.inscricoesService.findOne(+sendEmailDto.inscricaoId);
       if (!inscricao) {
         throw new HttpException('Inscrição não encontrada', HttpStatus.NOT_FOUND);
       }
 
       const success = await this.emailService.sendCustomEmail(
-        inscricao, 
-        sendCustomEmailDto.subject, 
-        sendCustomEmailDto.message
+        inscricao,
+        sendEmailDto.subject,
+        sendEmailDto.message
       );
       
       if (success) {
         return {
           success: true,
-          message: 'Email personalizado enviado com sucesso',
+          message: `Email enviado com sucesso para ${inscricao.email}`,
           inscricao: {
             id: inscricao.id,
             fullName: inscricao.fullName,
             email: inscricao.email
-          },
-          email: {
-            subject: sendCustomEmailDto.subject,
-            message: sendCustomEmailDto.message
           }
         };
       } else {
-        throw new HttpException('Erro ao enviar email', HttpStatus.INTERNAL_SERVER_ERROR);
+        throw new HttpException('Falha ao enviar email', HttpStatus.INTERNAL_SERVER_ERROR);
       }
     } catch (error) {
       if (error instanceof HttpException) {
@@ -138,256 +89,171 @@ export class EmailController {
     }
   }
 
-  @Post('bulk')
-  @ApiOperation({ summary: 'Enviar email personalizado para múltiplos inscritos' })
-  @ApiResponse({ status: 200, description: 'Emails enviados com sucesso' })
-  @ApiResponse({ status: 404, description: 'Uma ou mais inscrições não encontradas' })
-  @ApiResponse({ status: 500, description: 'Erro ao enviar emails' })
-  async sendBulkEmail(@Body() sendBulkEmailDto: SendBulkEmailDto) {
+  @Get('auth-url')
+  @ApiOperation({ summary: 'Gerar URL de autorização para obter refresh token' })
+  @ApiResponse({ status: 200, description: 'URL de autorização gerada' })
+  async generateAuthUrl() {
+    const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    const googleClientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
+
+    if (!googleClientId || !googleClientSecret) {
+      throw new HttpException('GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET devem estar configurados', HttpStatus.BAD_REQUEST);
+    }
+
+    const { google } = require('googleapis');
+    
+    const oauth2Client = new google.auth.OAuth2(
+      googleClientId,
+      googleClientSecret,
+      'http://localhost:3000/oauth/callback' // Redirect URI para desenvolvimento
+    );
+
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/gmail.send'],
+      prompt: 'consent' // Força a tela de consentimento para obter refresh token
+    });
+
+    return {
+      success: true,
+      message: 'URL de autorização gerada com sucesso',
+      authUrl: authUrl,
+      instructions: [
+        '1. Configure o redirect URI no Google Console: http://localhost:3000/oauth/callback',
+        '2. Acesse a URL acima no seu navegador',
+        '3. Faça login com sua conta Google',
+        '4. Autorize o aplicativo',
+        '5. Copie o código de autorização que aparece na tela',
+        '6. Use o endpoint /email/exchange-code com esse código'
+      ]
+    };
+  }
+
+  @Get('exchange-code/:code')
+  @ApiOperation({ summary: 'Trocar código de autorização por refresh token' })
+  @ApiParam({ name: 'code', description: 'Código de autorização recebido do Google' })
+  @ApiResponse({ status: 200, description: 'Refresh token gerado com sucesso' })
+  async exchangeCodeForToken(@Param('code') code: string) {
+    const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    const googleClientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
+
+    if (!googleClientId || !googleClientSecret) {
+      throw new HttpException('GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET devem estar configurados', HttpStatus.BAD_REQUEST);
+    }
+
     try {
-      const results = [];
-      const errors = [];
+      const { google } = require('googleapis');
+      
+      const oauth2Client = new google.auth.OAuth2(
+        googleClientId,
+        googleClientSecret,
+        'http://localhost:3000/oauth/callback'
+      );
 
-      for (const inscricaoId of sendBulkEmailDto.inscricaoIds) {
-        try {
-          const inscricao = await this.inscricoesService.findOne(parseInt(inscricaoId));
-          
-          if (!inscricao) {
-            errors.push({
-              inscricaoId,
-              error: 'Inscrição não encontrada'
-            });
-            continue;
-          }
-
-          const success = await this.emailService.sendCustomEmail(
-            inscricao, 
-            sendBulkEmailDto.subject, 
-            sendBulkEmailDto.message
-          );
-
-          if (success) {
-            results.push({
-              inscricaoId,
-              fullName: inscricao.fullName,
-              email: inscricao.email,
-              status: 'enviado'
-            });
-          } else {
-            errors.push({
-              inscricaoId,
-              fullName: inscricao.fullName,
-              email: inscricao.email,
-              error: 'Erro ao enviar email'
-            });
-          }
-        } catch (error) {
-          errors.push({
-            inscricaoId,
-            error: error.message
-          });
-        }
-      }
-
+      const { tokens } = await oauth2Client.getToken(code);
+      
       return {
         success: true,
-        message: `Processamento concluído. ${results.length} emails enviados, ${errors.length} erros.`,
-        results,
-        errors,
-        summary: {
-          total: sendBulkEmailDto.inscricaoIds.length,
-          sent: results.length,
-          failed: errors.length
-        }
+        message: 'Tokens gerados com sucesso!',
+        tokens: {
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          scope: tokens.scope,
+          token_type: tokens.token_type,
+          expiry_date: tokens.expiry_date
+        },
+        nextSteps: [
+          '1. Copie o refresh_token acima',
+          '2. Configure GOOGLE_REFRESH_TOKEN no Railway Dashboard',
+          '3. Configure EMAIL_USER com seu email Gmail',
+          '4. Teste o envio com /email/test/1'
+        ]
       };
     } catch (error) {
-      throw new HttpException('Erro interno do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(`Erro ao trocar código por token: ${error.message}`, HttpStatus.BAD_REQUEST);
     }
   }
 
-  @Post('payment-instructions')
-  @ApiOperation({ summary: 'Enviar email de instruções de pagamento de acordo com a forma escolhida' })
-  @ApiResponse({ status: 200, description: 'Email enviado com sucesso' })
-  @ApiResponse({ status: 404, description: 'Inscrição não encontrada' })
-  @ApiResponse({ status: 500, description: 'Erro ao enviar email' })
-  async sendPaymentInstructions(@Body() dto: SendPaymentInstructionEmailDto) {
-    try {
-      const inscricao = await this.inscricoesService.findOne(parseInt(dto.inscricaoId));
+  @Get('config')
+  @ApiOperation({ summary: 'Verificar configuração da Gmail API' })
+  @ApiResponse({ status: 200, description: 'Status das configurações de email' })
+  async checkEmailConfig() {
+    const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    const googleClientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
+    const googleRefreshToken = this.configService.get<string>('GOOGLE_REFRESH_TOKEN');
+    const emailUser = this.configService.get<string>('EMAIL_USER');
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
 
-      if (!inscricao) {
-        throw new HttpException('Inscrição não encontrada', HttpStatus.NOT_FOUND);
-      }
+    const isRailway = nodeEnv === 'production' || railwayEnv;
+    const hasGoogleConfig = !!(googleClientId && googleClientSecret && googleRefreshToken);
 
-      const success = await this.emailService.sendPaymentInstructionEmail(inscricao, { paymentLink: inscricao.registrationLot === 'lote1' ? "https://mpago.la/1KX5CeV" : "https://mpago.la/22L9ag7" });
-
-      if (success) {
-        return {
-          success: true,
-          message: 'Email de instruções de pagamento enviado com sucesso',
-          inscricao: {
-            id: inscricao.id,
-            fullName: inscricao.fullName,
-            email: inscricao.email,
-            paymentMethod: inscricao.paymentMethod,
+    return {
+      success: true,
+      message: 'Status das configurações de email',
+      config: {
+        environment: {
+          nodeEnv: nodeEnv || 'NÃO CONFIGURADO',
+          railwayEnv: railwayEnv || 'NÃO DETECTADO',
+          status: isRailway ? '🚂 Railway/Produção' : '💻 Desenvolvimento'
+        },
+        gmailApiConfig: {
+          clientId: {
+            configured: !!googleClientId,
+            status: googleClientId ? `✅ ${googleClientId.substring(0, 20)}...` : '❌ NÃO CONFIGURADO'
           },
-        };
-      } else {
-        throw new HttpException('Erro ao enviar email', HttpStatus.INTERNAL_SERVER_ERROR);
-      }
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException('Erro interno do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  @Post('contract')
-  @ApiOperation({ summary: 'Enviar contrato em PDF por email para um inscrito' })
-  @ApiResponse({ status: 200, description: 'Contrato enviado com sucesso' })
-  @ApiResponse({ status: 404, description: 'Inscrição não encontrada' })
-  @ApiResponse({ status: 500, description: 'Erro ao enviar contrato' })
-  async sendContract(@Body() dto: SendContractEmailDto) {
-    try {
-      const inscricao = await this.inscricoesService.findOne(parseInt(dto.inscricaoId));
-
-      if (!inscricao) {
-        throw new HttpException('Inscrição não encontrada', HttpStatus.NOT_FOUND);
-      }
-
-      const success = await this.emailService.sendContractEmail(inscricao, {
-        contractUrl: dto.contractUrl,
-        contractPath: dto.contractPath,
-        filename: dto.filename,
-      });
-
-      if (success) {
-        return {
-          success: true,
-          message: 'Contrato enviado com sucesso',
-          inscricao: {
-            id: inscricao.id,
-            fullName: inscricao.fullName,
-            email: inscricao.email,
+          clientSecret: {
+            configured: !!googleClientSecret,
+            status: googleClientSecret ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
           },
-        };
-      } else {
-        throw new HttpException('Erro ao enviar contrato', HttpStatus.INTERNAL_SERVER_ERROR);
-      }
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException('Erro interno do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  @Get('test/:inscricaoId')
-  @ApiOperation({ summary: 'Testar envio de email para um inscrito (email de boas-vindas)' })
-  @ApiParam({ name: 'inscricaoId', description: 'ID da inscrição' })
-  @ApiResponse({ status: 200, description: 'Email de teste enviado com sucesso' })
-  @ApiResponse({ status: 404, description: 'Inscrição não encontrada' })
-  async testEmail(@Param('inscricaoId') inscricaoId: string) {
-    try {
-      const inscricao = await this.inscricoesService.findOne(parseInt(inscricaoId));
-      
-      if (!inscricao) {
-        throw new HttpException('Inscrição não encontrada', HttpStatus.NOT_FOUND);
-      }
-
-      const success = await this.emailService.sendWelcomeEmail(inscricao);
-      
-      if (success) {
-        return {
-          success: true,
-          message: 'Email de teste enviado com sucesso',
-          inscricao: {
-            id: inscricao.id,
-            fullName: inscricao.fullName,
-            email: inscricao.email
+          refreshToken: {
+            configured: !!googleRefreshToken,
+            status: googleRefreshToken ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
+          },
+          emailUser: {
+            configured: !!emailUser,
+            status: emailUser ? `✅ ${emailUser}` : '❌ NÃO CONFIGURADO'
           }
-        };
-      } else {
-        throw new HttpException('Erro ao enviar email de teste', HttpStatus.INTERNAL_SERVER_ERROR);
+        },
+        emailService: {
+          willUse: '🚀 Gmail API (100% GRATUITO)',
+          fromEmail: emailUser || 'EMAIL_USER não configurado',
+          environment: 'Local + Railway'
+        }
+      },
+      recommendations: {
+        issues: [
+          ...(!hasGoogleConfig ? ['Configure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET e GOOGLE_REFRESH_TOKEN'] : []),
+          ...(!emailUser ? ['Configure EMAIL_USER'] : [])
+        ],
+        nextSteps: [
+          'Teste o envio de email com /email/test/1',
+          ...(isRailway ? ['Monitore os logs em tempo real no Railway Dashboard'] : ['Monitore os logs no terminal local'])
+        ],
+        environmentInfo: {
+          message: 'Gmail API funciona tanto local quanto no Railway!'
+        },
+        gmailApiSetup: {
+          message: 'Gmail API é 100% GRATUITO - sem limites de envio!',
+          steps: [
+            '1. Acesse console.developers.google.com',
+            '2. Crie um novo projeto ou selecione um existente',
+            '3. Ative a Gmail API',
+            '4. Crie credenciais OAuth 2.0',
+            '5. Configure redirect URI: http://localhost:3000/oauth/callback',
+            '6. Configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET',
+            '7. Use /email/auth-url para gerar URL de autorização',
+            '8. Use /email/exchange-code/:code para obter refresh token',
+            '9. Configure GOOGLE_REFRESH_TOKEN e EMAIL_USER'
+          ],
+          automatedSteps: [
+            '✅ Use /email/auth-url para gerar URL de autorização',
+            '✅ Use /email/exchange-code/:code para obter refresh token',
+            '✅ Configure as variáveis no Railway Dashboard',
+            '✅ Teste com /email/test/1'
+          ]
+        }
       }
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException('Erro interno do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+    };
   }
-
-      @Get('config')
-      @ApiOperation({ summary: 'Verificar configuração das variáveis de ambiente de email' })
-      @ApiResponse({ status: 200, description: 'Status das configurações de email' })
-      async checkEmailConfig() {
-        const emailUser = this.configService.get<string>('EMAIL_USER');
-        const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
-        const nodeEnv = this.configService.get<string>('NODE_ENV');
-        const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
-
-        const isRailway = nodeEnv === 'production' || railwayEnv;
-        const hasEmailConfig = !!(emailUser && emailPassword);
-
-        return {
-          success: true,
-          message: 'Status das configurações de email',
-          config: {
-            environment: {
-              nodeEnv: nodeEnv || 'NÃO CONFIGURADO',
-              railwayEnv: railwayEnv || 'NÃO DETECTADO',
-              status: isRailway ? '🚂 Railway/Produção' : '💻 Desenvolvimento'
-            },
-            smtpConfig: {
-              emailUser: {
-                configured: !!emailUser,
-                status: emailUser ? `✅ ${emailUser}` : '❌ NÃO CONFIGURADO'
-              },
-              emailPassword: {
-                configured: !!emailPassword,
-                status: emailPassword ? '✅ Configurado' : '❌ NÃO CONFIGURADO'
-              }
-            },
-            emailService: {
-              willUse: '📧 SMTP Otimizado',
-              fromEmail: emailUser || 'EMAIL_USER não configurado',
-              environment: isRailway ? 'Railway/Produção' : 'Desenvolvimento Local'
-            }
-          },
-          recommendations: {
-            issues: [
-              ...(!hasEmailConfig ? ['Configure EMAIL_USER e EMAIL_PASSWORD'] : []),
-              ...(isRailway ? ['Railway pode bloquear SMTP - considere usar App Password do Gmail'] : [])
-            ],
-            nextSteps: [
-              'Teste o envio de email com /email/test/1',
-              ...(isRailway ? ['Monitore os logs em tempo real no Railway Dashboard'] : ['Monitore os logs no terminal local'])
-            ],
-            environmentInfo: {
-              message: isRailway ? 'Railway usa Outlook SMTP (funciona!)' : 'Local usa Gmail SMTP'
-            },
-            emailSetup: {
-              railway: {
-                message: 'Para Railway, use conta Outlook/Hotmail',
-                steps: [
-                  '1. Crie uma conta Outlook/Hotmail gratuita',
-                  '2. Use seu email Outlook como EMAIL_USER',
-                  '3. Use sua senha normal como EMAIL_PASSWORD',
-                  '4. Railway usa smtp-mail.outlook.com'
-                ]
-              },
-              local: {
-                message: 'Para desenvolvimento local, use Gmail com App Password',
-                steps: [
-                  '1. Ative verificação em duas etapas em myaccount.google.com',
-                  '2. Gere uma App Password em "Segurança" > "Senhas de app"',
-                  '3. Use a senha gerada (16 caracteres) como EMAIL_PASSWORD'
-                ]
-              }
-            }
-          }
-        };
-      }
-
 }

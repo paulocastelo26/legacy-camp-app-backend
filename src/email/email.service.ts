@@ -1,275 +1,256 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
 import { Inscricao } from '../inscricoes/entities/inscricao.entity';
 import * as fs from 'fs';
 import * as path from 'path';
+import { google } from 'googleapis';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: nodemailer.Transporter;
+  private gmail: any;
 
   constructor(private configService: ConfigService) {
-    this.initializeEmailService();
+    this.initializeGmailAPI();
   }
 
   async sendPaymentInstructionEmail(
     inscricao: Inscricao,
     options?: { paymentLink?: string }
   ): Promise<boolean> {
-    return await this.sendEmailWithRetry(
+    return await this.sendEmail(
       inscricao,
       '📌 Instruções de pagamento - Legacy Camp',
-      this.generatePaymentInstructionEmailHTML(inscricao, options),
-      'instruções de pagamento'
+      this.generatePaymentInstructionEmailHTML(inscricao, options)
     );
   }
 
-  private initializeEmailService() {
-    this.logger.log(`🔧 Inicializando serviço de email...`);
-    this.initializeTransporter();
-  }
-
-  private initializeTransporter() {
-    const emailUser = this.configService.get<string>('EMAIL_USER');
-    const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
-    const nodeEnv = this.configService.get<string>('NODE_ENV');
-
-    // Configuração específica para Railway e produção
-    if (nodeEnv === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-      this.logger.log(`🚂 Railway detectado - usando Outlook SMTP (funciona no Railway)`);
-      
-      this.transporter = nodemailer.createTransport({
-        host: 'smtp-mail.outlook.com',
-        port: 587,
-        secure: false, // TLS
-        auth: {
-          user: emailUser,
-          pass: emailPassword,
-        },
-        connectionTimeout: 30000,
-        greetingTimeout: 15000,
-        socketTimeout: 30000,
-        tls: {
-          rejectUnauthorized: false,
-          ciphers: 'SSLv3'
-        },
-        pool: false,
-        maxConnections: 1,
-        maxMessages: 1,
-        rateDelta: 30000,
-        rateLimit: 1,
-        debug: false,
-        logger: false,
-      } as nodemailer.TransportOptions);
-    } else {
-      this.logger.log(`💻 Configuração SMTP para desenvolvimento local`);
-      
-      this.transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: emailUser,
-          pass: emailPassword,
-        },
-        connectionTimeout: 60000,
-        greetingTimeout: 30000,
-        socketTimeout: 60000,
-        tls: {
-          rejectUnauthorized: false,
-          ciphers: 'SSLv3'
-        },
-        pool: true,
-        maxConnections: 5,
-        maxMessages: 100,
-        rateDelta: 20000,
-        rateLimit: 5,
-      } as nodemailer.TransportOptions);
-    }
-
-    // Verificar conexão na inicialização
-    this.verifyConnection();
-  }
-
-  private async verifyConnection(): Promise<void> {
-    const maxRetries = 3;
-    let lastError: Error | null = null;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        this.logger.log(`🔍 Tentativa ${attempt}/${maxRetries} - Verificando conexão com servidor de email...`);
-        
-        await this.transporter.verify();
-        this.logger.log('✅ Conexão com servidor de email verificada com sucesso');
-        return;
-      } catch (error) {
-        lastError = error;
-        this.logger.error(`❌ Tentativa ${attempt}/${maxRetries} falhou: ${error.message}`);
-        
-        if (attempt < maxRetries) {
-          const delay = attempt * 2000; // 2s, 4s, 6s
-          this.logger.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
-          await this.sleep(delay);
-        }
-      }
-    }
-
-    this.logger.error(`💥 Falha ao verificar conexão após ${maxRetries} tentativas`);
-    this.logger.error(`🔍 Último erro: ${lastError?.message}`);
-    this.logger.warn(`⚠️ O serviço continuará funcionando, mas emails podem falhar`);
-    this.logger.warn(`🔧 Verifique as configurações EMAIL_USER e EMAIL_PASSWORD`);
-  }
-
-  async sendContractEmail(
-    inscricao: Inscricao,
-    options?: { contractUrl?: string; contractPath?: string; filename?: string }
-  ): Promise<boolean> {
-    try {
-      const fallbackUrl = this.configService.get<string>('CONTRACT_PDF_URL');
-      const fallbackPath = this.configService.get<string>('CONTRACT_PDF_PATH');
-      const filename = options?.filename || 'Contrato Legacy Camp.pdf';
-
-      let attachmentSource = options?.contractUrl || fallbackUrl || options?.contractPath || fallbackPath;
-
-      // Fallback: procurar arquivo padrão na pasta public com o nome informado pelo usuário
-      if (!attachmentSource) {
-        const defaultPublicPath = path.resolve(
-          process.cwd(),
-          'public',
-          'CONTRATO PARTICIPAÇÃO LEGACY CAMP MANAUS 25.pdf'
-        );
-        if (fs.existsSync(defaultPublicPath)) {
-          attachmentSource = defaultPublicPath;
-        }
-      }
-
-      if (!attachmentSource) {
-        throw new Error('Caminho/URL do contrato PDF não configurado. Defina CONTRACT_PDF_URL ou CONTRACT_PDF_PATH, ou informe via request.');
-      }
-
-      const mailOptions = {
-        from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
-        to: inscricao.email,
-        subject: '📄 Contrato - Legacy Camp',
-        html: this.generateContractEmailHTML(inscricao),
-        attachments: [
-          {
-            filename,
-            path: attachmentSource,
-          },
-        ],
-      } as nodemailer.SendMailOptions;
-
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Contrato enviado para ${inscricao.email}`);
-      return true;
-    } catch (error) {
-      this.logger.error(`Erro ao enviar contrato: ${error.message}`);
-      return false;
-    }
+  async sendContractEmail(inscricao: Inscricao): Promise<boolean> {
+    return await this.sendEmail(
+      inscricao,
+      '📄 Contrato de Participação - Legacy Camp',
+      this.generateContractEmailHTML(inscricao)
+    );
   }
 
   async sendWelcomeEmail(inscricao: Inscricao): Promise<boolean> {
-    return await this.sendEmailWithRetry(
+    return await this.sendEmail(
       inscricao,
       '🎉 Bem-vindo ao Legacy Camp!',
-      this.generateWelcomeEmailHTML(inscricao),
-      'boas-vindas'
+      this.generateWelcomeEmailHTML(inscricao)
     );
   }
 
   async sendStatusUpdateEmail(inscricao: Inscricao, newStatus: string): Promise<boolean> {
-    return await this.sendEmailWithRetry(
+    return await this.sendEmail(
       inscricao,
-      `📋 Atualização de Status - Legacy Camp`,
-      this.generateStatusUpdateEmailHTML(inscricao, newStatus),
-      'atualização de status'
+      `📊 Atualização de Status - Legacy Camp`,
+      this.generateStatusUpdateEmailHTML(inscricao, newStatus)
     );
   }
 
   async sendCustomEmail(inscricao: Inscricao, subject: string, message: string): Promise<boolean> {
-    return await this.sendEmailWithRetry(
+    return await this.sendEmail(
       inscricao,
       subject,
-      this.generateCustomEmailHTML(inscricao, message),
-      'personalizado'
+      this.generateCustomEmailHTML(inscricao, message)
     );
   }
 
-  private async sendEmailWithRetry(
-    inscricao: Inscricao,
-    subject: string,
-    htmlContent: string,
-    emailType: string,
-    maxRetries: number = 3
-  ): Promise<boolean> {
-    let lastError: Error | null = null;
+  private initializeGmailAPI() {
+    const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    const googleClientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
+    const googleRefreshToken = this.configService.get<string>('GOOGLE_REFRESH_TOKEN');
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        this.logger.log(`📧 Tentativa ${attempt}/${maxRetries} - Enviando email de ${emailType} para ${inscricao.email}`);
+    this.logger.log(`🔧 Inicializando Gmail API...`);
 
-        // Usar SMTP otimizado
-        const mailOptions = {
-          from: `"Legacy Camp" <${this.configService.get<string>('EMAIL_USER')}>`,
-          to: inscricao.email,
-          subject: subject,
-          html: htmlContent,
-        };
-
-        const result = await this.transporter.sendMail(mailOptions);
-        
-        this.logger.log(`✅ Email de ${emailType} enviado com sucesso via SMTP para ${inscricao.email} (tentativa ${attempt})`);
-        this.logger.debug(`📧 Message ID: ${result.messageId}`);
-        
-        return true;
-      } catch (error) {
-        lastError = error;
-        this.logger.error(`❌ Tentativa ${attempt}/${maxRetries} falhou para ${inscricao.email}: ${error.message}`);
-        
-        // Se for erro de conexão SMTP, tentar recriar o transporter
-        if (error.message.includes('Connection timeout') || error.message.includes('ECONNRESET')) {
-          this.logger.warn(`🔄 Erro de conexão SMTP detectado, tentando recriar transporter...`);
-          await this.recreateTransporter();
-        }
-        
-        if (attempt < maxRetries) {
-          const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
-          this.logger.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
-          await this.sleep(delay);
-        }
-      }
+    if (!googleClientId || !googleClientSecret || !googleRefreshToken) {
+      this.logger.error(`❌ Configuração Gmail API incompleta!`);
+      this.logger.error(`Configure: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN`);
+      return;
     }
 
-    this.logger.error(`💥 Falha definitiva ao enviar email de ${emailType} para ${inscricao.email} após ${maxRetries} tentativas`);
-    this.logger.error(`🔍 Último erro: ${lastError?.message}`);
-    
-    return false;
+    const oauth2Client = new google.auth.OAuth2(
+      googleClientId,
+      googleClientSecret,
+      'urn:ietf:wg:oauth:2.0:oob'
+    );
+
+    oauth2Client.setCredentials({
+      refresh_token: googleRefreshToken,
+    });
+
+    this.gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    this.logger.log(`✅ Gmail API inicializada com sucesso`);
   }
 
-  private async recreateTransporter(): Promise<void> {
+  private async sendEmail(inscricao: Inscricao, subject: string, htmlContent: string): Promise<boolean> {
+    if (!this.gmail) {
+      this.logger.error(`❌ Gmail API não inicializada!`);
+      return false;
+    }
+
     try {
-      this.logger.log(`🔄 Recriando transporter de email...`);
+      this.logger.log(`📧 Enviando email para ${inscricao.email}: ${subject}`);
       
-      // Fechar conexões existentes
-      if (this.transporter) {
-        this.transporter.close();
-      }
+      const emailUser = this.configService.get<string>('EMAIL_USER');
       
-      // Aguardar um pouco antes de recriar
-      await this.sleep(2000);
+      const emailLines = [
+        `From: "Legacy Camp" <${emailUser}>`,
+        `To: ${inscricao.email}`,
+        `Subject: ${subject}`,
+        `Content-Type: text/html; charset=utf-8`,
+        ``,
+        htmlContent
+      ].join('\n');
+
+      const encodedEmail = Buffer.from(emailLines).toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+      const result = await this.gmail.users.messages.send({
+        userId: 'me',
+        requestBody: {
+          raw: encodedEmail,
+        },
+      });
       
-      // Recriar transporter
-      this.initializeTransporter();
+      this.logger.log(`✅ Email enviado com sucesso para ${inscricao.email}`);
+      this.logger.debug(`📧 Message ID: ${result.data.id}`);
       
-      this.logger.log(`✅ Transporter recriado com sucesso`);
+      return true;
     } catch (error) {
-      this.logger.error(`❌ Erro ao recriar transporter: ${error.message}`);
+      this.logger.error(`❌ Erro ao enviar email para ${inscricao.email}: ${error.message}`);
+      return false;
     }
   }
 
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  private generatePaymentInstructionEmailHTML(inscricao: Inscricao, options?: { paymentLink?: string }): string {
+    const contractPath = path.join(process.cwd(), 'public', 'CONTRATO PARTICIPAÇÃO LEGACY CAMP MANAUS 25.pdf');
+    const contractExists = fs.existsSync(contractPath);
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Instruções de Pagamento - Legacy Camp</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #2c3e50; color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background: #f9f9f9; }
+          .highlight { background: #e74c3c; color: white; padding: 10px; margin: 10px 0; }
+          .info-box { background: #ecf0f1; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; }
+          .footer { text-align: center; padding: 20px; color: #7f8c8d; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🏕️ Legacy Camp</h1>
+            <h2>Instruções de Pagamento</h2>
+          </div>
+          
+          <div class="content">
+            <p>Olá <strong>${inscricao.fullName}</strong>!</p>
+            
+            <p>Obrigado por se inscrever no Legacy Camp! Sua inscrição foi recebida com sucesso.</p>
+            
+            <div class="highlight">
+              <h3>📋 Dados da Inscrição</h3>
+              <p><strong>Nome:</strong> ${inscricao.fullName}</p>
+              <p><strong>Email:</strong> ${inscricao.email}</p>
+              <p><strong>Telefone:</strong> ${inscricao.phone}</p>
+              <p><strong>Status:</strong> ${inscricao.status}</p>
+            </div>
+            
+            <div class="info-box">
+              <h3>💳 Instruções de Pagamento</h3>
+              <p>Para completar sua inscrição, realize o pagamento através dos métodos disponíveis:</p>
+              <ul>
+                <li><strong>PIX:</strong> Utilize o QR Code ou chave PIX fornecida</li>
+                <li><strong>Transferência:</strong> Dados bancários serão enviados em breve</li>
+                <li><strong>Cartão:</strong> Link de pagamento será disponibilizado</li>
+              </ul>
+              ${options?.paymentLink ? `<p><a href="${options.paymentLink}" style="background: #27ae60; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">💳 Realizar Pagamento</a></p>` : ''}
+            </div>
+            
+            ${contractExists ? `
+            <div class="info-box">
+              <h3>📄 Contrato de Participação</h3>
+              <p>Por favor, leia atentamente o contrato de participação anexo.</p>
+            </div>
+            ` : ''}
+            
+            <div class="info-box">
+              <h3>📞 Suporte</h3>
+              <p>Em caso de dúvidas, entre em contato conosco:</p>
+              <p><strong>Email:</strong> contato@legacycamp.com</p>
+              <p><strong>WhatsApp:</strong> (92) 99999-9999</p>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p>Legacy Camp - Transformando vidas através de experiências únicas</p>
+            <p>Este é um email automático, por favor não responda.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  private generateContractEmailHTML(inscricao: Inscricao): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Contrato de Participação - Legacy Camp</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #2c3e50; color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background: #f9f9f9; }
+          .highlight { background: #e74c3c; color: white; padding: 10px; margin: 10px 0; }
+          .info-box { background: #ecf0f1; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; }
+          .footer { text-align: center; padding: 20px; color: #7f8c8d; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🏕️ Legacy Camp</h1>
+            <h2>Contrato de Participação</h2>
+          </div>
+          
+          <div class="content">
+            <p>Olá <strong>${inscricao.fullName}</strong>!</p>
+            
+            <p>Segue em anexo o contrato de participação do Legacy Camp.</p>
+            
+            <div class="highlight">
+              <h3>📋 Dados da Inscrição</h3>
+              <p><strong>Nome:</strong> ${inscricao.fullName}</p>
+              <p><strong>Email:</strong> ${inscricao.email}</p>
+              <p><strong>Status:</strong> ${inscricao.status}</p>
+            </div>
+            
+            <div class="info-box">
+              <h3>📄 Contrato de Participação</h3>
+              <p>Por favor, leia atentamente o contrato de participação anexo e mantenha uma cópia para seus registros.</p>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p>Legacy Camp - Transformando vidas através de experiências únicas</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
   }
 
   private generateWelcomeEmailHTML(inscricao: Inscricao): string {
@@ -277,44 +258,47 @@ export class EmailService {
       <!DOCTYPE html>
       <html>
       <head>
-        <meta charset="utf-8">
-        <title>Bem-vindo ao Legacy Camp</title>
+        <meta charset="UTF-8">
+        <title>Bem-vindo ao Legacy Camp!</title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .highlight { background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; }
-          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+          .header { background: #27ae60; color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background: #f9f9f9; }
+          .highlight { background: #e74c3c; color: white; padding: 10px; margin: 10px 0; }
+          .info-box { background: #ecf0f1; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; }
+          .footer { text-align: center; padding: 20px; color: #7f8c8d; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>🎉 Bem-vindo ao Legacy Camp!</h1>
-            <p>Sua inscrição foi recebida com sucesso</p>
+            <h1>🎉 Legacy Camp</h1>
+            <h2>Bem-vindo!</h2>
           </div>
+          
           <div class="content">
-            <h2>Olá, ${inscricao.fullName}!</h2>
-            <p>Estamos muito felizes em receber sua inscrição para o Legacy Camp!</p>
+            <p>Olá <strong>${inscricao.fullName}</strong>!</p>
+            
+            <p>Seja muito bem-vindo ao Legacy Camp! Estamos muito felizes em tê-lo conosco nesta jornada transformadora.</p>
             
             <div class="highlight">
-              <h3>📋 Detalhes da sua inscrição:</h3>
-              <p><strong>Nome:</strong> ${inscricao.fullName}</p>
-              <p><strong>Email:</strong> ${inscricao.email}</p>
-              <p><strong>Lote:</strong> ${inscricao.registrationLot}</p>
-              <p><strong>Status:</strong> ${inscricao.status}</p>
+              <h3>🎯 O que esperar</h3>
+              <p>Uma experiência única de crescimento pessoal, espiritual e comunitário.</p>
             </div>
-
-            <h3>📅 Próximos passos:</h3>
-            <ul>
-              <li>Aguarde a confirmação de pagamento</li>
-              <li>Você receberá atualizações por email</li>
-              <li>Prepare-se para uma experiência incrível!</li>
-            </ul>
-
-            <p>Se você tiver alguma dúvida, não hesite em nos contatar.</p>
+            
+            <div class="info-box">
+              <h3>📋 Próximos Passos</h3>
+              <p>Em breve você receberá mais informações sobre:</p>
+              <ul>
+                <li>Programação detalhada</li>
+                <li>Lista de itens necessários</li>
+                <li>Orientações de chegada</li>
+                <li>Contato da equipe</li>
+              </ul>
+            </div>
           </div>
+          
           <div class="footer">
             <p>Legacy Camp - Transformando vidas através de experiências únicas</p>
           </div>
@@ -325,136 +309,47 @@ export class EmailService {
   }
 
   private generateStatusUpdateEmailHTML(inscricao: Inscricao, newStatus: string): string {
-    const statusMessages = {
-      'APROVADA': 'Sua inscrição foi aprovada! 🎉',
-      'REPROVADA': 'Sua inscrição foi reprovada.',
-      'PENDENTE': 'Sua inscrição está em análise.',
-      'CANCELADA': 'Sua inscrição foi cancelada.'
-    };
-
     return `
       <!DOCTYPE html>
       <html>
       <head>
-        <meta charset="utf-8">
+        <meta charset="UTF-8">
         <title>Atualização de Status - Legacy Camp</title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .status { background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 20px 0; text-align: center; }
-          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+          .header { background: #f39c12; color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background: #f9f9f9; }
+          .highlight { background: #e74c3c; color: white; padding: 10px; margin: 10px 0; }
+          .info-box { background: #ecf0f1; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; }
+          .footer { text-align: center; padding: 20px; color: #7f8c8d; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>📋 Atualização de Status</h1>
-            <p>Legacy Camp</p>
+            <h1>📊 Legacy Camp</h1>
+            <h2>Atualização de Status</h2>
           </div>
+          
           <div class="content">
-            <h2>Olá, ${inscricao.fullName}!</h2>
+            <p>Olá <strong>${inscricao.fullName}</strong>!</p>
             
-            <div class="status">
-              <h3>${statusMessages[newStatus] || 'Status atualizado'}</h3>
+            <p>Seu status de inscrição foi atualizado.</p>
+            
+            <div class="highlight">
+              <h3>📋 Status Atualizado</h3>
               <p><strong>Novo Status:</strong> ${newStatus}</p>
+              <p><strong>Nome:</strong> ${inscricao.fullName}</p>
+              <p><strong>Email:</strong> ${inscricao.email}</p>
             </div>
-
-            <p>O status da sua inscrição foi atualizado. Mantenha-se atento aos próximos comunicados.</p>
+            
+            <div class="info-box">
+              <h3>📞 Suporte</h3>
+              <p>Em caso de dúvidas sobre esta atualização, entre em contato conosco.</p>
+            </div>
           </div>
-          <div class="footer">
-            <p>Legacy Camp - Transformando vidas através de experiências únicas</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-  }
-
-  private generatePaymentInstructionEmailHTML(
-    inscricao: Inscricao,
-    options?: { paymentLink?: string }
-  ): string {
-    const paymentMethod = (inscricao.paymentMethod || '').toLowerCase();
-
-    const methodLabel =
-      paymentMethod === 'cartao'
-        ? 'Cartão de crédito'
-        : paymentMethod === 'pix'
-        ? 'PIX'
-        : paymentMethod === 'carne'
-        ? 'Carnê Legacy'
-        : inscricao.paymentMethod;
-
-    const baseHeader = `
-      <div class="header">
-        <h1>🎉 Parabéns por se inscrever no Legacy Camp!</h1>
-      </div>
-      <div class="content">
-        <h2>Olá, ${inscricao.fullName}!</h2>
-        <p>Seja bem-vindo ao Legacy Camp! Temos certeza de que sua presença será marcante, pois Deus preparou algo especial para você nestes dias. Serão momentos de poderosa presença dEle e de comunhão entre os irmãos.</p>
-        <div class="highlight">
-          <p><strong>Status do pagamento:</strong> Pendente</p>
-          <p><strong>Forma de pagamento selecionada:</strong> ${methodLabel}</p>
-        </div>
-    `;
-
-    let specificBlock = '';
-
-    if (paymentMethod === 'cartao') {
-      const link = options?.paymentLink || '#';
-      specificBlock = `
-        <p>Finalize o pagamento no link abaixo:</p>
-        <p><a href="${link}" target="_blank">🔗 Clique aqui para pagar</a></p>
-      `;
-    } else if (paymentMethod === 'pix') {
-      specificBlock = `
-        <p>Finalize o pagamento abaixo: <strong>PIX</strong>.</p>
-        <div class="pix-box">pix.legacy.am@gmail.com</div>
-        <p><em>Observação: Caso o pagamento ainda não tenha sido realizado, por favor, ignore esta mensagem.</em></p>
-      `;
-    } else if (paymentMethod === 'carne') {
-      specificBlock = `
-        <p>Você escolheu o <strong>Carnê Legacy</strong> como forma de pagamento.</p>
-        <p>Nossa equipe entrará em contato em breve para processar a primeira parcela.</p>
-      `;
-    } else {
-      specificBlock = `
-        <p>Forma de pagamento não reconhecida. Por favor, entre em contato com nossa equipe.</p>
-      `;
-    }
-
-    const supportBlock = `
-        <div class="support">
-          <p><strong>Precisa de ajuda? Fale conosco:</strong></p>
-          <p>📞 Telefone: +55 92 8409-5783<br>✉ E-mail: lgcymanaus@gmail.com</p>
-          <p>Estamos à disposição para qualquer dúvida. Deus abençoe sua jornada até o acampamento!</p>
-        </div>
-      </div>
-    `;
-
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Instruções de Pagamento - Legacy Camp</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .highlight { background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; }
-          .pix-box { background: #fff; padding: 12px 16px; border: 1px dashed #667eea; display: inline-block; border-radius: 6px; font-weight: bold; }
-          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          ${baseHeader}
-          ${specificBlock}
-          ${supportBlock}
+          
           <div class="footer">
             <p>Legacy Camp - Transformando vidas através de experiências únicas</p>
           </div>
@@ -469,68 +364,41 @@ export class EmailService {
       <!DOCTYPE html>
       <html>
       <head>
-        <meta charset="utf-8">
-        <title>Comunicado - Legacy Camp</title>
+        <meta charset="UTF-8">
+        <title>Mensagem - Legacy Camp</title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .message { background: #fff; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #667eea; }
-          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+          .header { background: #9b59b6; color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background: #f9f9f9; }
+          .highlight { background: #e74c3c; color: white; padding: 10px; margin: 10px 0; }
+          .info-box { background: #ecf0f1; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; }
+          .footer { text-align: center; padding: 20px; color: #7f8c8d; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>📢 Comunicado</h1>
-            <p>Legacy Camp</p>
+            <h1>💌 Legacy Camp</h1>
+            <h2>Mensagem Personalizada</h2>
           </div>
+          
           <div class="content">
-            <h2>Olá, ${inscricao.fullName}!</h2>
+            <p>Olá <strong>${inscricao.fullName}</strong>!</p>
             
-            <div class="message">
-              ${message.replace(/\n/g, '<br>')}
+            <div class="info-box">
+              <h3>📝 Mensagem</h3>
+              <p>${message}</p>
             </div>
-
-            <p>Atenciosamente,<br>Equipe Legacy Camp</p>
+            
+            <div class="highlight">
+              <h3>📋 Dados da Inscrição</h3>
+              <p><strong>Nome:</strong> ${inscricao.fullName}</p>
+              <p><strong>Email:</strong> ${inscricao.email}</p>
+              <p><strong>Status:</strong> ${inscricao.status}</p>
+            </div>
           </div>
-          <div class="footer">
-            <p>Legacy Camp - Transformando vidas através de experiências únicas</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-  }
-
-  private generateContractEmailHTML(inscricao: Inscricao): string {
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Contrato - Legacy Camp</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>📄 Contrato - Legacy Camp</h1>
-          </div>
-          <div class="content">
-            <h2>Olá, ${inscricao.fullName}!</h2>
-            <p>Segue em anexo o contrato referente à sua inscrição no Legacy Camp.</p>
-            <p>Por favor, revise o documento com atenção. Caso haja instruções de assinatura e devolução, siga-as conforme orientado pela equipe.</p>
-            <p>Em caso de dúvidas, entre em contato:</p>
-            <p>📞 +55 92 8409-5783<br/>✉ lgcymanaus@gmail.com</p>
-          </div>
+          
           <div class="footer">
             <p>Legacy Camp - Transformando vidas através de experiências únicas</p>
           </div>
