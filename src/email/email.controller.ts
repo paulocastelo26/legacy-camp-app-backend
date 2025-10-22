@@ -50,6 +50,42 @@ export class EmailController {
     }
   }
 
+  @Post('send-contract/:id')
+  @ApiOperation({ summary: 'Enviar contrato de participação para uma inscrição' })
+  @ApiParam({ name: 'id', description: 'ID da inscrição' })
+  @ApiResponse({ status: 200, description: 'Contrato enviado com sucesso' })
+  @ApiResponse({ status: 404, description: 'Inscrição não encontrada' })
+  async sendContract(@Param('id') id: string) {
+    try {
+      const inscricao = await this.inscricoesService.findOne(+id);
+      if (!inscricao) {
+        throw new HttpException('Inscrição não encontrada', HttpStatus.NOT_FOUND);
+      }
+
+      const success = await this.emailService.sendContractEmail(inscricao);
+      
+      if (success) {
+        return {
+          success: true,
+          message: `Contrato enviado com sucesso para ${inscricao.email}`,
+          inscricao: {
+            id: inscricao.id,
+            fullName: inscricao.fullName,
+            email: inscricao.email,
+            status: inscricao.status
+          }
+        };
+      } else {
+        throw new HttpException('Falha ao enviar contrato', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException('Erro interno do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
   @Post('send')
   @ApiOperation({ summary: 'Enviar email personalizado para uma inscrição' })
   @ApiResponse({ status: 200, description: 'Email enviado com sucesso' })
@@ -80,6 +116,78 @@ export class EmailController {
         };
       } else {
         throw new HttpException('Falha ao enviar email', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException('Erro interno do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post('send-payment-instructions/:id')
+  @ApiOperation({ summary: 'Enviar instruções de pagamento para uma inscrição' })
+  @ApiParam({ name: 'id', description: 'ID da inscrição' })
+  @ApiResponse({ status: 200, description: 'Instruções de pagamento enviadas com sucesso' })
+  @ApiResponse({ status: 404, description: 'Inscrição não encontrada' })
+  async sendPaymentInstructions(@Param('id') id: string) {
+    try {
+      const inscricao = await this.inscricoesService.findOne(+id);
+      if (!inscricao) {
+        throw new HttpException('Inscrição não encontrada', HttpStatus.NOT_FOUND);
+      }
+
+      const success = await this.emailService.sendPaymentInstructionEmail(inscricao);
+      
+      if (success) {
+        return {
+          success: true,
+          message: `Instruções de pagamento enviadas com sucesso para ${inscricao.email}`,
+          inscricao: {
+            id: inscricao.id,
+            fullName: inscricao.fullName,
+            email: inscricao.email,
+            status: inscricao.status
+          }
+        };
+      } else {
+        throw new HttpException('Falha ao enviar instruções de pagamento', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException('Erro interno do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post('send-welcome/:id')
+  @ApiOperation({ summary: 'Enviar email de boas-vindas para uma inscrição' })
+  @ApiParam({ name: 'id', description: 'ID da inscrição' })
+  @ApiResponse({ status: 200, description: 'Email de boas-vindas enviado com sucesso' })
+  @ApiResponse({ status: 404, description: 'Inscrição não encontrada' })
+  async sendWelcome(@Param('id') id: string) {
+    try {
+      const inscricao = await this.inscricoesService.findOne(+id);
+      if (!inscricao) {
+        throw new HttpException('Inscrição não encontrada', HttpStatus.NOT_FOUND);
+      }
+
+      const success = await this.emailService.sendWelcomeEmail(inscricao);
+      
+      if (success) {
+        return {
+          success: true,
+          message: `Email de boas-vindas enviado com sucesso para ${inscricao.email}`,
+          inscricao: {
+            id: inscricao.id,
+            fullName: inscricao.fullName,
+            email: inscricao.email,
+            status: inscricao.status
+          }
+        };
+      } else {
+        throw new HttpException('Falha ao enviar email de boas-vindas', HttpStatus.INTERNAL_SERVER_ERROR);
       }
     } catch (error) {
       if (error instanceof HttpException) {

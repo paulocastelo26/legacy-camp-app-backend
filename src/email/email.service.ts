@@ -26,10 +26,11 @@ export class EmailService {
   }
 
   async sendContractEmail(inscricao: Inscricao): Promise<boolean> {
-    return await this.sendEmail(
+    return await this.sendEmailWithAttachment(
       inscricao,
       '📄 Contrato de Participação - Legacy Camp',
-      this.generateContractEmailHTML(inscricao)
+      this.generateContractEmailHTML(inscricao),
+      'CONTRATO PARTICIPAÇÃO LEGACY CAMP MANAUS 25.pdf'
     );
   }
 
@@ -98,7 +99,7 @@ export class EmailService {
       const emailLines = [
         `From: "Legacy Camp" <${emailUser}>`,
         `To: ${inscricao.email}`,
-        `Subject: ${subject}`,
+        `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
         `Content-Type: text/html; charset=utf-8`,
         ``,
         htmlContent
@@ -122,6 +123,94 @@ export class EmailService {
       return true;
     } catch (error) {
       this.logger.error(`❌ Erro ao enviar email para ${inscricao.email}: ${error.message}`);
+      
+      // Se for erro de token inválido, orientar sobre regeneração
+      if (error.message.includes('invalid_grant')) {
+        this.logger.warn(`🔄 Refresh token inválido detectado. Precisa regenerar tokens.`);
+        this.logger.warn(`📋 Use /email/auth-url para gerar nova URL de autorização`);
+        this.logger.warn(`📋 Depois use /email/exchange-code/:code para obter novo refresh token`);
+      }
+      
+      return false;
+    }
+  }
+
+  private async sendEmailWithAttachment(inscricao: Inscricao, subject: string, htmlContent: string, attachmentFilename: string): Promise<boolean> {
+    if (!this.gmail) {
+      this.logger.error(`❌ Gmail API não inicializada!`);
+      return false;
+    }
+
+    try {
+      this.logger.log(`📧 Enviando email com anexo para ${inscricao.email}: ${subject}`);
+      
+      const emailUser = this.configService.get<string>('EMAIL_USER');
+      const attachmentPath = path.join(process.cwd(), 'public', attachmentFilename);
+      
+      // Verificar se o arquivo existe
+      if (!fs.existsSync(attachmentPath)) {
+        this.logger.error(`❌ Arquivo de anexo não encontrado: ${attachmentPath}`);
+        return false;
+      }
+
+      // Ler o arquivo
+      const attachmentData = fs.readFileSync(attachmentPath);
+      const attachmentBase64 = attachmentData.toString('base64');
+
+      // Criar boundary único
+      const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Construir o email multipart
+      const emailParts = [
+        `From: "Legacy Camp" <${emailUser}>`,
+        `To: ${inscricao.email}`,
+        `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
+        `MIME-Version: 1.0`,
+        `Content-Type: multipart/mixed; boundary="${boundary}"`,
+        ``,
+        `--${boundary}`,
+        `Content-Type: text/html; charset=utf-8`,
+        `Content-Transfer-Encoding: 7bit`,
+        ``,
+        htmlContent,
+        ``,
+        `--${boundary}`,
+        `Content-Type: application/pdf`,
+        `Content-Disposition: attachment; filename*=UTF-8''${encodeURIComponent(attachmentFilename)}`,
+        `Content-Transfer-Encoding: base64`,
+        ``,
+        attachmentBase64,
+        ``,
+        `--${boundary}--`
+      ].join('\n');
+
+      const encodedEmail = Buffer.from(emailParts).toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+      const result = await this.gmail.users.messages.send({
+        userId: 'me',
+        requestBody: {
+          raw: encodedEmail,
+        },
+      });
+      
+      this.logger.log(`✅ Email com anexo enviado com sucesso para ${inscricao.email}`);
+      this.logger.debug(`📧 Message ID: ${result.data.id}`);
+      this.logger.debug(`📎 Anexo: ${attachmentFilename}`);
+      
+      return true;
+    } catch (error) {
+      this.logger.error(`❌ Erro ao enviar email com anexo para ${inscricao.email}: ${error.message}`);
+      
+      // Se for erro de token inválido, tentar regenerar
+      if (error.message.includes('invalid_grant')) {
+        this.logger.warn(`🔄 Refresh token inválido detectado. Precisa regenerar tokens.`);
+        this.logger.warn(`📋 Use /email/auth-url para gerar nova URL de autorização`);
+        this.logger.warn(`📋 Depois use /email/exchange-code/:code para obter novo refresh token`);
+      }
+      
       return false;
     }
   }
