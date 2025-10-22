@@ -30,7 +30,7 @@ export class EmailService {
       inscricao,
       '📄 Contrato de Participação - Legacy Camp',
       this.generateContractEmailHTML(inscricao),
-      'CONTRATO PARTICIPAÇÃO LEGACY CAMP MANAUS 25.pdf'
+      'CONTRATO.pdf'
     );
   }
 
@@ -148,15 +148,29 @@ export class EmailService {
       
       // Determinar o caminho correto baseado no ambiente
       let attachmentPath: string;
+      const possiblePaths = [];
+      
       if (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production') {
-        // No Railway/produção, usar caminho absoluto
-        attachmentPath = path.join(__dirname, '..', '..', 'public', attachmentFilename);
+        // No Railway/produção, tentar múltiplos caminhos
+        possiblePaths.push(
+          path.join(__dirname, '..', '..', 'public', attachmentFilename),
+          path.join(__dirname, '..', 'assets', 'CONTRATO.pdf'),
+          path.join(process.cwd(), 'public', attachmentFilename),
+          path.join(process.cwd(), 'dist', 'public', attachmentFilename)
+        );
       } else {
         // Em desenvolvimento local
-        attachmentPath = path.join(process.cwd(), 'public', attachmentFilename);
+        possiblePaths.push(
+          path.join(process.cwd(), 'public', attachmentFilename),
+          path.join(__dirname, '..', 'assets', 'CONTRATO.pdf')
+        );
       }
       
+      // Encontrar o primeiro caminho que existe
+      attachmentPath = possiblePaths.find(p => fs.existsSync(p)) || possiblePaths[0];
+      
       this.logger.log(`🔍 Procurando arquivo em: ${attachmentPath}`);
+      this.logger.log(`🔍 Caminhos testados: ${possiblePaths.join(', ')}`);
       
       // Verificar se o arquivo existe
       if (!fs.existsSync(attachmentPath)) {
