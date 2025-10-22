@@ -253,12 +253,17 @@ export class EmailService {
 
   private generatePaymentInstructionEmailHTML(inscricao: Inscricao, options?: { paymentLink?: string }): string {
     const paymentMethod = (inscricao.paymentMethod || '').toLowerCase();
-
-    const methodLabel =
+    
+    const methodLabel = 
       paymentMethod === 'cartao' ? 'Cartão de crédito' :
       paymentMethod === 'pix' ? 'PIX' :
       paymentMethod === 'carne' ? 'Carnê Legacy' :
       inscricao.paymentMethod;
+
+    // Verificar se usou cupom para definir o valor
+    const hasCoupon = inscricao.couponCode && inscricao.couponCode.trim() !== '';
+    const paymentValue = hasCoupon ? 'R$ 200,00' : 'R$ 300,00';
+    const couponInfo = hasCoupon ? `<p><strong>Cupom aplicado:</strong> ${inscricao.couponCode}</p>` : '';
 
     const baseHeader = `
       <div class="header">
@@ -270,31 +275,37 @@ export class EmailService {
         <div class="highlight">
           <p><strong>Status do pagamento:</strong> Pendente</p>
           <p><strong>Forma de pagamento selecionada:</strong> ${methodLabel}</p>
+          <p><strong>Valor a pagar:</strong> ${paymentValue}</p>
+          ${couponInfo}
         </div>
     `;
 
     let specificBlock = '';
-
+    
     if (paymentMethod === 'cartao') {
       const link = options?.paymentLink || 'https://mpago.la/22L9ag7';
       specificBlock = `
         <p>Finalize o pagamento no link abaixo:</p>
+        <p><strong>Valor:</strong> ${paymentValue}</p>
         <p><a href="${link}" target="_blank">🔗 Clique aqui para pagar</a></p>
       `;
     } else if (paymentMethod === 'pix') {
       specificBlock = `
         <p>Finalize o pagamento abaixo: <strong>PIX</strong>.</p>
+        <p><strong>Valor:</strong> ${paymentValue}</p>
         <div class="pix-box">pix.legacy.am@gmail.com</div>
         <p><em>Observação: Caso o pagamento ainda não tenha sido realizado, por favor, ignore esta mensagem.</em></p>
       `;
     } else if (paymentMethod === 'carne') {
       specificBlock = `
         <p>Você escolheu o <strong>Carnê Legacy</strong> como forma de pagamento.</p>
+        <p><strong>Valor total:</strong> ${paymentValue}</p>
         <p>Nossa equipe entrará em contato em breve para processar a primeira parcela.</p>
       `;
     } else {
       specificBlock = `
         <p>Forma de pagamento não reconhecida. Por favor, entre em contato com nossa equipe.</p>
+        <p><strong>Valor:</strong> ${paymentValue}</p>
       `;
     }
 
