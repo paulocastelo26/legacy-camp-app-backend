@@ -145,11 +145,33 @@ export class EmailService {
       this.logger.log(`📧 Enviando email com anexo para ${inscricao.email}: ${subject}`);
       
       const emailUser = this.configService.get<string>('EMAIL_USER');
-      const attachmentPath = path.join(process.cwd(), 'public', attachmentFilename);
+      
+      // Determinar o caminho correto baseado no ambiente
+      let attachmentPath: string;
+      if (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production') {
+        // No Railway/produção, usar caminho absoluto
+        attachmentPath = path.join(__dirname, '..', '..', 'public', attachmentFilename);
+      } else {
+        // Em desenvolvimento local
+        attachmentPath = path.join(process.cwd(), 'public', attachmentFilename);
+      }
+      
+      this.logger.log(`🔍 Procurando arquivo em: ${attachmentPath}`);
       
       // Verificar se o arquivo existe
       if (!fs.existsSync(attachmentPath)) {
         this.logger.error(`❌ Arquivo de anexo não encontrado: ${attachmentPath}`);
+        
+        // Listar arquivos disponíveis para debug
+        const publicDir = path.dirname(attachmentPath);
+        if (fs.existsSync(publicDir)) {
+          const files = fs.readdirSync(publicDir);
+          this.logger.log(`📁 Arquivos disponíveis em ${publicDir}:`);
+          files.forEach(file => this.logger.log(`  - ${file}`));
+        } else {
+          this.logger.error(`❌ Diretório public não encontrado: ${publicDir}`);
+        }
+        
         return false;
       }
 
