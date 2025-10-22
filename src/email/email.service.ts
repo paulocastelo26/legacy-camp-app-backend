@@ -252,74 +252,84 @@ export class EmailService {
   }
 
   private generatePaymentInstructionEmailHTML(inscricao: Inscricao, options?: { paymentLink?: string }): string {
-    const contractPath = path.join(process.cwd(), 'public', 'CONTRATO PARTICIPAÇÃO LEGACY CAMP MANAUS 25.pdf');
-    const contractExists = fs.existsSync(contractPath);
-    
+    const paymentMethod = (inscricao.paymentMethod || '').toLowerCase();
+
+    const methodLabel =
+      paymentMethod === 'cartao' ? 'Cartão de crédito' :
+      paymentMethod === 'pix' ? 'PIX' :
+      paymentMethod === 'carne' ? 'Carnê Legacy' :
+      inscricao.paymentMethod;
+
+    const baseHeader = `
+      <div class="header">
+        <h1>🎉 Parabéns por se inscrever no Legacy Camp!</h1>
+      </div>
+      <div class="content">
+        <h2>Olá, ${inscricao.fullName}!</h2>
+        <p>Seja bem-vindo ao Legacy Camp! Temos certeza de que sua presença será marcante, pois Deus preparou algo especial para você nestes dias. Serão momentos de poderosa presença dEle e de comunhão entre os irmãos.</p>
+        <div class="highlight">
+          <p><strong>Status do pagamento:</strong> Pendente</p>
+          <p><strong>Forma de pagamento selecionada:</strong> ${methodLabel}</p>
+        </div>
+    `;
+
+    let specificBlock = '';
+
+    if (paymentMethod === 'cartao') {
+      const link = options?.paymentLink || 'https://mpago.la/22L9ag7';
+      specificBlock = `
+        <p>Finalize o pagamento no link abaixo:</p>
+        <p><a href="${link}" target="_blank">🔗 Clique aqui para pagar</a></p>
+      `;
+    } else if (paymentMethod === 'pix') {
+      specificBlock = `
+        <p>Finalize o pagamento abaixo: <strong>PIX</strong>.</p>
+        <div class="pix-box">pix.legacy.am@gmail.com</div>
+        <p><em>Observação: Caso o pagamento ainda não tenha sido realizado, por favor, ignore esta mensagem.</em></p>
+      `;
+    } else if (paymentMethod === 'carne') {
+      specificBlock = `
+        <p>Você escolheu o <strong>Carnê Legacy</strong> como forma de pagamento.</p>
+        <p>Nossa equipe entrará em contato em breve para processar a primeira parcela.</p>
+      `;
+    } else {
+      specificBlock = `
+        <p>Forma de pagamento não reconhecida. Por favor, entre em contato com nossa equipe.</p>
+      `;
+    }
+
+    const supportBlock = `
+        <div class="support">
+          <p><strong>Precisa de ajuda? Fale conosco:</strong></p>
+          <p>📞 Telefone: +55 92 8409-5783<br>✉ E-mail: lgcymanaus@gmail.com</p>
+          <p>Estamos à disposição para qualquer dúvida. Deus abençoe sua jornada até o acampamento!</p>
+        </div>
+      </div>
+    `;
+
     return `
       <!DOCTYPE html>
       <html>
       <head>
-        <meta charset="UTF-8">
+        <meta charset="utf-8">
         <title>Instruções de Pagamento - Legacy Camp</title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #2c3e50; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background: #f9f9f9; }
-          .highlight { background: #e74c3c; color: white; padding: 10px; margin: 10px 0; }
-          .info-box { background: #ecf0f1; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; }
-          .footer { text-align: center; padding: 20px; color: #7f8c8d; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .highlight { background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; }
+          .pix-box { background: #fff; padding: 12px 16px; border: 1px dashed #667eea; display: inline-block; border-radius: 6px; font-weight: bold; }
+          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
         </style>
       </head>
       <body>
         <div class="container">
-          <div class="header">
-            <h1>🏕️ Legacy Camp</h1>
-            <h2>Instruções de Pagamento</h2>
-          </div>
-          
-          <div class="content">
-            <p>Olá <strong>${inscricao.fullName}</strong>!</p>
-            
-            <p>Obrigado por se inscrever no Legacy Camp! Sua inscrição foi recebida com sucesso.</p>
-            
-            <div class="highlight">
-              <h3>📋 Dados da Inscrição</h3>
-              <p><strong>Nome:</strong> ${inscricao.fullName}</p>
-              <p><strong>Email:</strong> ${inscricao.email}</p>
-              <p><strong>Telefone:</strong> ${inscricao.phone}</p>
-              <p><strong>Status:</strong> ${inscricao.status}</p>
-            </div>
-            
-            <div class="info-box">
-              <h3>💳 Instruções de Pagamento</h3>
-              <p>Para completar sua inscrição, realize o pagamento através dos métodos disponíveis:</p>
-              <ul>
-                <li><strong>PIX:</strong> Utilize o QR Code ou chave PIX fornecida</li>
-                <li><strong>Transferência:</strong> Dados bancários serão enviados em breve</li>
-                <li><strong>Cartão:</strong> Link de pagamento será disponibilizado</li>
-              </ul>
-              ${options?.paymentLink ? `<p><a href="${options.paymentLink}" style="background: #27ae60; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">💳 Realizar Pagamento</a></p>` : ''}
-            </div>
-            
-            ${contractExists ? `
-            <div class="info-box">
-              <h3>📄 Contrato de Participação</h3>
-              <p>Por favor, leia atentamente o contrato de participação anexo.</p>
-            </div>
-            ` : ''}
-            
-            <div class="info-box">
-              <h3>📞 Suporte</h3>
-              <p>Em caso de dúvidas, entre em contato conosco:</p>
-              <p><strong>Email:</strong> contato@legacycamp.com</p>
-              <p><strong>WhatsApp:</strong> (92) 99999-9999</p>
-            </div>
-          </div>
-          
+          ${baseHeader}
+          ${specificBlock}
+          ${supportBlock}
           <div class="footer">
             <p>Legacy Camp - Transformando vidas através de experiências únicas</p>
-            <p>Este é um email automático, por favor não responda.</p>
           </div>
         </div>
       </body>
@@ -341,6 +351,7 @@ export class EmailService {
           .content { padding: 20px; background: #f9f9f9; }
           .highlight { background: #e74c3c; color: white; padding: 10px; margin: 10px 0; }
           .info-box { background: #ecf0f1; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; }
+          .support { background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #3498db; }
           .footer { text-align: center; padding: 20px; color: #7f8c8d; }
         </style>
       </head>
@@ -367,6 +378,12 @@ export class EmailService {
               <h3>📄 Contrato de Participação</h3>
               <p>Por favor, leia atentamente o contrato de participação anexo e mantenha uma cópia para seus registros.</p>
             </div>
+
+            <div class="support">
+              <p><strong>Precisa de ajuda? Fale conosco:</strong></p>
+              <p>📞 Telefone: +55 92 8409-5783<br>✉ E-mail: lgcymanaus@gmail.com</p>
+              <p>Estamos à disposição para qualquer dúvida. Deus abençoe sua jornada até o acampamento!</p>
+            </div>
           </div>
           
           <div class="footer">
@@ -392,6 +409,7 @@ export class EmailService {
           .content { padding: 20px; background: #f9f9f9; }
           .highlight { background: #e74c3c; color: white; padding: 10px; margin: 10px 0; }
           .info-box { background: #ecf0f1; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; }
+          .support { background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #3498db; }
           .footer { text-align: center; padding: 20px; color: #7f8c8d; }
         </style>
       </head>
@@ -422,6 +440,12 @@ export class EmailService {
                 <li>Contato da equipe</li>
               </ul>
             </div>
+
+            <div class="support">
+              <p><strong>Precisa de ajuda? Fale conosco:</strong></p>
+              <p>📞 Telefone: +55 92 8409-5783<br>✉ E-mail: lgcymanaus@gmail.com</p>
+              <p>Estamos à disposição para qualquer dúvida. Deus abençoe sua jornada até o acampamento!</p>
+            </div>
           </div>
           
           <div class="footer">
@@ -447,6 +471,7 @@ export class EmailService {
           .content { padding: 20px; background: #f9f9f9; }
           .highlight { background: #e74c3c; color: white; padding: 10px; margin: 10px 0; }
           .info-box { background: #ecf0f1; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; }
+          .support { background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #3498db; }
           .footer { text-align: center; padding: 20px; color: #7f8c8d; }
         </style>
       </head>
@@ -469,9 +494,10 @@ export class EmailService {
               <p><strong>Email:</strong> ${inscricao.email}</p>
             </div>
             
-            <div class="info-box">
-              <h3>📞 Suporte</h3>
-              <p>Em caso de dúvidas sobre esta atualização, entre em contato conosco.</p>
+            <div class="support">
+              <p><strong>Precisa de ajuda? Fale conosco:</strong></p>
+              <p>📞 Telefone: +55 92 8409-5783<br>✉ E-mail: lgcymanaus@gmail.com</p>
+              <p>Estamos à disposição para qualquer dúvida. Deus abençoe sua jornada até o acampamento!</p>
             </div>
           </div>
           
@@ -498,6 +524,7 @@ export class EmailService {
           .content { padding: 20px; background: #f9f9f9; }
           .highlight { background: #e74c3c; color: white; padding: 10px; margin: 10px 0; }
           .info-box { background: #ecf0f1; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; }
+          .support { background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #3498db; }
           .footer { text-align: center; padding: 20px; color: #7f8c8d; }
         </style>
       </head>
@@ -521,6 +548,12 @@ export class EmailService {
               <p><strong>Nome:</strong> ${inscricao.fullName}</p>
               <p><strong>Email:</strong> ${inscricao.email}</p>
               <p><strong>Status:</strong> ${inscricao.status}</p>
+            </div>
+
+            <div class="support">
+              <p><strong>Precisa de ajuda? Fale conosco:</strong></p>
+              <p>📞 Telefone: +55 92 8409-5783<br>✉ E-mail: lgcymanaus@gmail.com</p>
+              <p>Estamos à disposição para qualquer dúvida. Deus abençoe sua jornada até o acampamento!</p>
             </div>
           </div>
           
