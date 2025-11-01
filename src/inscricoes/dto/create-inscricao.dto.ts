@@ -83,8 +83,8 @@ export class CreateInscricaoDto {
   couponCode?: string;
 
   // Informações Adicionais
-  @ApiProperty({ description: 'Tamanho da camisa', enum: ['P', 'M', 'G', 'GG', 'XG'] })
-  @IsIn(['P', 'M', 'G', 'GG', 'XG'])
+  @ApiProperty({ description: 'Tamanho da camisa', enum: ['PP','P', 'M', 'G', 'GG', 'XG'] })
+  @IsIn(['PP','P', 'M', 'G', 'GG', 'XG'])
   shirtSize: string;
 
   @ApiProperty({ description: 'Possui alergia', enum: ['sim', 'nao'] })
