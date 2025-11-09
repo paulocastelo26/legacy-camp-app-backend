@@ -64,7 +64,7 @@ export class CreateInscricaoDto {
   ministryParticipation: string;
 
   // Informações da Inscrição
-  @ApiProperty({ description: 'Lote da inscrição', enum: ['lote1', 'lote2'] })
+  @ApiProperty({ description: 'Lote da inscrição', enum: ['lote1', 'lote2', 'lote3'] })
   @IsIn(['lote1', 'lote2'])
   registrationLot: string;
 
