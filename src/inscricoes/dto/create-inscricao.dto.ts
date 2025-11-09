@@ -65,7 +65,7 @@ export class CreateInscricaoDto {
 
   // Informações da Inscrição
   @ApiProperty({ description: 'Lote da inscrição', enum: ['lote1', 'lote2', 'lote3'] })
-  @IsIn(['lote1', 'lote2'])
+  @IsIn(['lote1', 'lote2', 'lote3'])
   registrationLot: string;
 
   @ApiProperty({ description: 'Forma de pagamento', enum: ['pix', 'cartao', 'carne'] })
